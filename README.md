@@ -1,24 +1,34 @@
-# qlu-test-item-repository-desktop
+# ptmj
 
-## Project setup
-```
-npm install
-```
+An Electron application with Vue
 
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
+## Recommended IDE Setup
 
-### Compiles and minifies for production
-```
-npm run build
-```
+- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar)
 
-### Lints and fixes files
-```
-npm run lint
+## Project Setup
+
+### Install
+
+```bash
+$ npm install
 ```
 
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+### Development
+
+```bash
+$ npm run dev
+```
+
+### Build
+
+```bash
+# For windows
+$ npm run build:win
+
+# For macOS
+$ npm run build:mac
+
+# For Linux
+$ npm run build:linux
+```
