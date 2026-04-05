@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, globalShortcut } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import apiRegistry, { findApi } from './main-utils/apiRegistry'
 
 function createWindow() {
   // Create the browser window.
@@ -39,6 +40,21 @@ function createWindow() {
         mainWindow.webContents.openDevTools()
   })
 }
+
+// 通用API调用处理器
+ipcMain.handle('call-api', async (event, apiName, ...args) => {
+  const fn = findApi(apiName)
+  if (!fn) {
+    throw new Error(`API "${apiName}" not found`)
+  }
+  try {
+    const result = await fn(...args)
+    return result
+  } catch (error) {
+    console.error(`API ${apiName} 调用失败:`, error)
+    throw error
+  }
+})
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
