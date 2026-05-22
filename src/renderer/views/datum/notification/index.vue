@@ -389,7 +389,7 @@
 </template>
 
 <script setup name="Notification">
-import { listNotification, getNotification, delNotification, addNotification, updateNotification } from "@main/api/datum/notification"
+import { listNotification, getNotification, delNotification, addNotification, updateNotification } from "@/api/datum/notification"
 
 const { proxy } = getCurrentInstance()
 

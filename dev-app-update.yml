@@ -1,3 +1,5 @@
+# electron-updater 开发环境配置（仅用于开发调试，打包时不会被包含）
+
 provider: generic
 url: https://example.com/auto-updates
-updaterCacheDirName: ptmj-updater
+updaterCacheDirName: pezmax-updater

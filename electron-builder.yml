@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: ptmj
+productName: PezMax
 directories:
   buildResources: build
 files:
@@ -11,12 +11,19 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: ptmj
+  executableName: pezmax
+  # Windows 更新发布目标
+  publish:
+    - provider: generic
+      url: https://example.com/auto-updates
+      channel: latest
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  # 启用差分/增量更新（生成 .exe.blockmap 文件）
+  differentialPackage: true
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
@@ -25,6 +32,11 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
+  # macOS 更新发布目标（支持差分更新）
+  publish:
+    - provider: generic
+      url: https://example.com/auto-updates
+      channel: latest
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
@@ -34,9 +46,15 @@ linux:
     - deb
   maintainer: electronjs.org
   category: Utility
+  # Linux 更新发布目标（AppImage 支持差分更新）
+  publish:
+    - provider: generic
+      url: https://example.com/auto-updates
+      channel: latest
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+# 全局发布配置（兜底）
 publish:
   provider: generic
   url: https://example.com/auto-updates

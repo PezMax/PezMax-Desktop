@@ -176,6 +176,24 @@
               <el-input v-model="form.remark" type="textarea" placeholder="请输入内容" />
             </el-form-item>
           </el-col>
+          <div>
+             <el-upload
+                class="upload-demo"
+                drag
+                action="https://run.mocky.io/v3/9d059bf9-4660-45f2-925d-ce80ad6c4d15"
+                multiple
+              >
+                <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                <div class="el-upload__text">
+                  Drop file here or <em>click to upload</em>
+                </div>
+                <template #tip>
+                  <div class="el-upload__tip">
+                    jpg/png files with a size less than 500kb
+                  </div>
+                </template>
+              </el-upload>
+          </div>
         </el-row>
       </el-form>
       <template #footer>
@@ -189,7 +207,8 @@
 </template>
 
 <script setup name="File">
-import { listFile, getFile, delFile, addFile, updateFile } from "@main/api/datum/file"
+import { listFile, getFile, delFile, addFile, updateFile } from "@/api/datum/file"
+import { UploadFilled } from '@element-plus/icons-vue'
 
 const { proxy } = getCurrentInstance()
 
@@ -219,15 +238,15 @@ const data = reactive({
     fileStatus: null,
   },
   rules: {
-    fileName: [
-      { required: true, message: "文件名称不能为空", trigger: "blur" }
-    ],
-    fileUrl: [
-      { required: true, message: "文件URL不能为空", trigger: "blur" }
-    ],
-    fileSubject: [
-      { required: true, message: "科目不能为空", trigger: "blur" }
-    ],
+    // fileName: [
+    //   { required: true, message: "文件名称不能为空", trigger: "blur" }
+    // ],
+    // fileUrl: [
+    //   { required: true, message: "文件URL不能为空", trigger: "blur" }
+    // ],
+    // fileSubject: [
+    //   { required: true, message: "科目不能为空", trigger: "blur" }
+    // ],
   }
 })
 

@@ -139,7 +139,7 @@
 </template>
 
 <script setup name="Report">
-import { listReport, getReport, delReport, addReport, updateReport } from "@main/api/datum/report"
+import { listReport, getReport, delReport, addReport, updateReport } from "@/api/datum/report"
 
 const { proxy } = getCurrentInstance()
 

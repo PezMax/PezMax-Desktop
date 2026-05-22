@@ -117,7 +117,7 @@
 </template>
 
 <script setup name="Security">
-import { listSecurity, getSecurity, delSecurity, addSecurity, updateSecurity } from "@main/api/datum/security"
+import { listSecurity, getSecurity, delSecurity, addSecurity, updateSecurity } from "@/api/datum/security"
 
 const { proxy } = getCurrentInstance()
 
