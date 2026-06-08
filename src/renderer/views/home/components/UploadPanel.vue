@@ -128,8 +128,8 @@
                 <el-select v-model="uploadForm.fileType" placeholder="选择类型" class="modern-select" :teleported="false">
                   <el-option label="期末" :value="1" />
                   <el-option label="期中" :value="2" />
-                  <el-option label="资料" :value="3" />
-                  <el-option label="补考" :value="4" />
+                  <el-option label="补考" :value="3" />
+                  <el-option label="资料" :value="4" />
                   <el-option label="其他学校" :value="5" />
                   <el-option label="保持神秘" :value="6" />
                 </el-select>
