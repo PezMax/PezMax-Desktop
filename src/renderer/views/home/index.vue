@@ -505,8 +505,9 @@ const normalizeSearchResults = (list) => {
     .filter(item => {
       if (!item || typeof item !== 'object') return false
       const status = item.fileStatus ?? item.status
-      return status === undefined || status === null || Number(status) !== 2
-    }) // 搜索结果中同样过滤掉 fileStatus 为 2 的文件
+      // 过滤掉未审核（0）和未通过（2）的文件，仅显示审核通过（1）的文件
+      return status === undefined || status === null || (Number(status) !== 0 && Number(status) !== 2)
+    }) // 搜索结果中过滤掉未审核和未通过的文件
     .map(item => ({
       ...item,
       id: item.id || item.fileId || item.notifyId || Math.random().toString(36).slice(2, 11),
@@ -633,10 +634,10 @@ const formatTreeData = (nodes) => {
   if (!nodes) return []
   return nodes
     .filter(node => {
-      // 过滤掉 fileStatus 为 2 的文件（完全不显示在列表中）
+      // 过滤掉未审核（0）和未通过（2）的文件，仅显示审核通过（1）的文件
       const entity = node.ptmjFile || node.fileInfo || node
       const status = entity.fileStatus ?? entity.status
-      return status === undefined || status === null || Number(status) !== 2
+      return status === undefined || status === null || (Number(status) !== 0 && Number(status) !== 2)
     })
     .map(node => {
       // 调试：如果找到疑似文件的节点，在控制台打印
