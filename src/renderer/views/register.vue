@@ -70,6 +70,7 @@
                 >
                   <template #prefix><svg-icon icon-class="user" class="el-input__icon input-icon" /></template>
                 </el-input>
+                <p class="username-hint">本软件与学校无关，各位同学请勿将学号，手机号等注册为账号</p>
               </el-form-item>
 
               <el-form-item prop="password">
@@ -790,6 +791,13 @@ getCode()
   height: 42px;
   line-height: 42px;
   font-size: 15px;
+}
+
+.username-hint {
+  margin: 4px 0 0 4px;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.4;
 }
 
 .input-icon {
