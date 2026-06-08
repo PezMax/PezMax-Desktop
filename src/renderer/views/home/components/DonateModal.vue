@@ -24,7 +24,7 @@
                 <div class="pay-grid">
                   <div class="pay-card alipay" @click="currentPayType = 'alipay'">
                     <div class="pay-card-icon">
-                      <svg-icon icon-class="alipay" />
+                      <img :src="alipayLogo" alt="支付宝" class="pay-logo-img" />
                     </div>
                     <span>支付宝</span>
                   </div>
@@ -72,6 +72,7 @@
 import { computed, ref, watch } from 'vue'
 import { Close, ArrowLeft } from '@element-plus/icons-vue'
 import alipayImage from '@/assets/images/alipay/alipay.jpg'
+import alipayLogo from '@/assets/images/alipay/alipay-logo.png'
 import wechatImage from '@/assets/images/wechat/wechat.jpeg'
 
 const props = defineProps({
@@ -253,6 +254,17 @@ watch(visible, (newVal) => {
     font-size: 42px;
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     z-index: 1;
+
+    .pay-logo-img {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      display: block;
+      /* 兼容暗色模式下白色支付宝logo不可见 */
+      html.dark & {
+        // 支付宝圆形logo本身带蓝色底色，无需额外处理
+      }
+    }
   }
 
   span {
