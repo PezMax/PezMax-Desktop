@@ -49,8 +49,8 @@
             
             <div class="info-card">
               <span class="info-label">文件年份</span>
-              <span class="info-value highlight-num" :class="{ 'magic-year': fileInfo.fileYear === 114514 }">
-                {{ fileInfo.fileYear === 114514 ? '神秘年代' : (fileInfo.fileYear || '未知') }}
+              <span class="info-value highlight-num">
+                {{ fileInfo.fileYear || '未知' }}
               </span>
             </div>
           </div>
@@ -564,14 +564,6 @@ const handleDownload = () => {
     &.highlight-num {
       color: var(--ide-accent);
       font-family: 'JetBrains Mono', monospace;
-    }
-    
-    &.magic-year {
-      color: #8b5cf6;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-weight: 800;
-      text-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
-      animation: magic-pulse 2s infinite ease-in-out;
     }
   }
   
