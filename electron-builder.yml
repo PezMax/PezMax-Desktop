@@ -12,17 +12,18 @@ asarUnpack:
   - resources/**
 win:
   executableName: pezmax
-  # Windows 更新发布目标
+  # Windows 更新发布目标（GitHub Releases，通过 GH 代理供客户端下载）
+  # 发布时可用: npx electron-builder --win --publish always
   publish:
     - provider: generic
-      url: https://example.com/auto-updates
+      url: https://github.com/Torchman005/PezMax-Desktop/releases/latest/download
       channel: latest
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
-  # 启用差分/增量更新（生成 .exe.blockmap 文件）
+  # 启用差分/增量更新（生成 .exe.blockmap 文件供增量更新使用）
   differentialPackage: true
   # === 安装向导与目录自定义 ===
   oneClick: false                        # 启用完整安装向导（关闭一键安装）
@@ -39,7 +40,7 @@ mac:
   # macOS 更新发布目标（支持差分更新）
   publish:
     - provider: generic
-      url: https://example.com/auto-updates
+      url: https://github.com/Torchman005/PezMax-Desktop/releases/latest/download
       channel: latest
 dmg:
   artifactName: ${name}-${version}.${ext}
@@ -53,14 +54,14 @@ linux:
   # Linux 更新发布目标（AppImage 支持差分更新）
   publish:
     - provider: generic
-      url: https://example.com/auto-updates
+      url: https://github.com/Torchman005/PezMax-Desktop/releases/latest/download
       channel: latest
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-# 全局发布配置（兜底）
+# 全局发布配置（兜底）- 指向 GitHub Releases 最新版本
 publish:
   provider: generic
-  url: https://example.com/auto-updates
+  url: https://github.com/Torchman005/PezMax-Desktop/releases/latest/download
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
