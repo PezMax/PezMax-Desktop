@@ -235,6 +235,7 @@ defineExpose({ refresh: loadList, total })
   border: 1px solid var(--ide-border, #ebeef5);
   border-radius: 16px;
   padding: 20px;
+  min-width: 680px;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
   transition: box-shadow 0.24s ease, border-color 0.24s ease;
 }
@@ -278,11 +279,13 @@ defineExpose({ refresh: loadList, total })
   margin-bottom: 16px;
   align-items: center;
   padding: 14px;
+  min-width: 640px;
   border: 1px solid var(--ide-border, #ebeef5);
   border-radius: 16px;
   background: color-mix(in srgb, var(--ide-panel-bg, #fff) 94%, transparent);
 }
 .top-bar .el-input {
+  min-width: 200px;
   max-width: 560px;
 }
 .mode-tabs {
@@ -317,6 +320,7 @@ defineExpose({ refresh: loadList, total })
 }
 .reset-btn {
   min-height: 42px;
+  flex-shrink: 0;
   border-radius: 12px;
   padding: 0 22px;
   font-weight: 700;
@@ -324,8 +328,12 @@ defineExpose({ refresh: loadList, total })
 .panel-table {
   border-radius: 16px;
   overflow: hidden;
+  min-width: 640px;
   border: 1px solid var(--ide-border, #ebeef5);
   background: color-mix(in srgb, var(--ide-editor-bg, #fff) 92%, transparent);
+}
+.favorite-page :deep(.el-table__body-wrapper) {
+  overflow-x: auto;
 }
 :deep(.panel-table .el-table__header th.el-table__cell) {
   height: 56px;
@@ -424,7 +432,7 @@ defineExpose({ refresh: loadList, total })
   fill: currentColor;
   margin-right: 5px;
 }
-@media (max-width: 768px) {
+@media (max-width: 720px) {
   .top-bar {
     flex-direction: column;
     align-items: stretch;

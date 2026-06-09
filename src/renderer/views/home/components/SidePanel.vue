@@ -1031,11 +1031,12 @@ onUnmounted(() => {
 .panel-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
   padding: 0 8px 8px;
-  overflow-x: hidden;
 
   &::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   &::-webkit-scrollbar-thumb {
     background-color: var(--ide-border-hover);
@@ -1633,12 +1634,14 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 200px;
 }
 
 .bookmark-header {
   display: flex;
   align-items: center;
   margin-bottom: 16px;
+  min-width: 180px;
 
   .rounded-search {
     width: 100%;
@@ -1681,6 +1684,7 @@ onUnmounted(() => {
 .bookmark-tree-container {
   display: flex;
   flex-direction: column;
+  min-width: 180px;
 
   .bm-mini-cover {
     width: 16px;
