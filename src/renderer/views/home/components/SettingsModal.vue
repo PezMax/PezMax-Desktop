@@ -435,6 +435,54 @@
                     </div>
                   </div>
 
+                  <!-- 更新设置 -->
+                  <div v-else-if="activeTab === 'updates'" class="settings-section">
+                    <h3 class="section-header">软件更新</h3>
+
+                    <div class="setting-card-group">
+                      <!-- 更新源选择 -->
+                      <div class="setting-item flex-col-item">
+                        <div class="setting-info" style="width: 100%;">
+                          <span class="setting-label">更新源</span>
+                          <span class="setting-desc">当前使用 GitHub Releases 作为更新源，支持差分增量更新 (.blockmap)</span>
+                          <span class="setting-desc">校园网环境可能会出现下载卡顿，请切换网络后重试</span>
+                        </div>
+
+                        <div class="update-source-list">
+                          <div
+                            v-for="preset in presetUpdateSources"
+                            :key="preset.key"
+                            class="update-source-card"
+                            :class="{
+                              active: updateSourceConfig.presetKey === preset.key,
+                              disabled: isApplyingUpdateSource
+                            }"
+                            @click="selectPresetUpdateSource(preset)"
+                          >
+                            <div class="usc-header">
+                              <div class="usc-radio">
+                                <span class="radio-dot" v-if="updateSourceConfig.presetKey === preset.key"></span>
+                              </div>
+                              <span class="usc-label">{{ preset.label }}</span>
+                            </div>
+                            <div class="usc-url" :title="preset.url || `${preset.owner}/${preset.repo}`">
+                              <el-icon><Link /></el-icon>
+                              <span>{{ preset.url || `${preset.owner}/${preset.repo}` }}</span>
+                            </div>
+                            <div class="usc-features">
+                              <span class="feature-badge diff-badge">差分更新就绪</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 当前更新状态卡片 -->
+                    <div class="about-update-card" style="margin-top: 24px;">
+                      <UpdateCard />
+                    </div>
+                  </div>
+
                   <!-- 隐私与缓存 -->
                   <div v-else-if="activeTab === 'privacy'" class="settings-section">
                     <h3 class="section-header">隐私与缓存</h3>
@@ -525,7 +573,7 @@
 
 <script setup>
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted, toRaw, computed } from 'vue'
-import { Close, Setting, Monitor, Lock, InfoFilled, Check, WarningFilled, Download, Plus, Aim } from '@element-plus/icons-vue'
+import { Close, Setting, Monitor, Lock, InfoFilled, Check, WarningFilled, Download, Plus, Aim, UploadFilled, Refresh, Link, Folder } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { applyIdeAccentColor, applyIdeThemeState, applyWorkspaceBackgroundSettings, resolveEditorVisibilityValue } from '@/utils/ideAppearance'
 import { getToken } from '@/utils/auth'
@@ -551,6 +599,7 @@ const navItems = [
   { id: 'transfer', label: '上传与下载', icon: 'Download' },
   { id: 'appearance', label: '外观', icon: 'Monitor' },
   { id: 'shortcuts', label: '快捷键', icon: 'Aim' },
+  { id: 'updates', label: '更新', icon: 'UploadFilled' },
   { id: 'privacy', label: '隐私', icon: 'Lock' },
   { id: 'about', label: '关于', icon: 'InfoFilled' }
 ]
@@ -560,12 +609,69 @@ const showLicense = ref(false)
 const updateCardRef = ref(null)
 const appVersion = ref('1.0.0')
 
-// 获取应用版本
-onMounted(async () => {
-  if (window.electronAPI && window.electronAPI.getAppVersion) {
-    appVersion.value = await window.electronAPI.getAppVersion()
-  }
+// ========== 更新源配置逻辑 ==========
+const presetUpdateSources = ref([])
+const isApplyingUpdateSource = ref(false)
+
+const updateSourceConfig = reactive({
+  presetKey: 'gh-proxy-latest'  // 默认选中 GitHub Releases 源
 })
+
+// 获取预设更新源
+const fetchPresetSources = async () => {
+  if (window.electronAPI?.getPresetUpdateSources) {
+    presetUpdateSources.value = await window.electronAPI.getPresetUpdateSources()
+  }
+}
+
+// 从已保存的设置中恢复更新源状态
+const restoreUpdateSourceFromSettings = (savedSettings) => {
+  const source = savedSettings?.updateSource
+  if (!source || !source.provider) {
+    // 无已保存配置，使用默认源
+    const defaultPreset = presetUpdateSources.value.find(p => p.key === 'gh-proxy-latest')
+    if (defaultPreset) {
+      updateSourceConfig.presetKey = defaultPreset.key
+    }
+    return
+  }
+
+  // 检查是否匹配某个预设
+  const matchedPreset = presetUpdateSources.value.find((p) => {
+    if (p.provider !== source.provider) return false
+    if (source.provider === 'generic') return p.url === source.url
+    if (source.provider === 'github') return p.owner === source.owner && p.repo === source.repo
+    return false
+  })
+
+  updateSourceConfig.presetKey = matchedPreset ? matchedPreset.key : 'gh-proxy-latest'
+}
+
+const selectPresetUpdateSource = async (preset) => {
+  if (isApplyingUpdateSource.value) return
+  updateSourceConfig.presetKey = preset.key
+
+  isApplyingUpdateSource.value = true
+  try {
+    const config = {
+      provider: preset.provider,
+      url: preset.url || '',
+      owner: preset.owner || '',
+      repo: preset.repo || ''
+    }
+
+    if (window.electronAPI?.configureUpdateSource) {
+      await window.electronAPI.configureUpdateSource(config)
+    }
+
+    // 同步到 settings
+    settingsData.updateSource = config
+  } finally {
+    isApplyingUpdateSource.value = false
+  }
+}
+
+// 获取应用版本（合并到下方主 onMounted 中以避免竞态）
 
 
 
@@ -589,7 +695,8 @@ const settingsData = reactive({
     upload: 'CommandOrControl+U',
     settings: 'CommandOrControl+,',
     closeTab: 'CommandOrControl+W'
-  }
+  },
+  updateSource: null  // { provider, url?, owner?, repo? }
 })
 
 const isInitializing = ref(true)
@@ -852,11 +959,24 @@ const handleClickOutsideShortcut = () => {
 onMounted(async () => {
   window.addEventListener('click', handleClickOutsideShortcut)
 
+  // 并行加载预设更新源和应用版本
+  await Promise.all([
+    fetchPresetSources(),
+    (async () => {
+      if (window.electronAPI?.getAppVersion) {
+        appVersion.value = await window.electronAPI.getAppVersion()
+      }
+    })()
+  ])
+
   // 从主进程获取真实配置（仅在登录状态下应用壁纸和各种偏好设置，否则保持默认的干净白板状态）
   if (window.electronAPI && window.electronAPI.getSettings && !!getToken()) {
     const savedSettings = await window.electronAPI.getSettings()
     Object.assign(settingsData, savedSettings)
     settingsData.editorVisibility = resolveEditorVisibilityValue(savedSettings)
+
+    // 恢复更新源配置（此时 presetUpdateSources 已加载完毕）
+    restoreUpdateSourceFromSettings(savedSettings)
 
     // 确保从后端加载的年份数据是字符串格式以适配 date-picker
     if (settingsData.defaultYear !== undefined && settingsData.defaultYear !== null && settingsData.defaultYear !== 0 && settingsData.defaultYear !== '0') {
@@ -1536,6 +1656,120 @@ const handleClearCache = async () => {
 
   &:hover {
     transform: scale(1.15);
+  }
+}
+
+/* ======== 更新源选择卡片 ======== */
+.update-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.update-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--ide-border);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  background: rgba(255, 255, 255, 0.5);
+
+  html.dark & {
+    background: rgba(15, 23, 42, 0.2);
+  }
+
+  &:hover {
+    border-color: var(--ide-border-hover);
+    background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.04);
+  }
+
+  &.active {
+    border-color: var(--ide-accent);
+    background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.08);
+    box-shadow: 0 0 0 3px rgba(var(--ide-accent-rgb, 64, 158, 255), 0.1);
+  }
+
+  &.disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+}
+
+.usc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.usc-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--ide-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease;
+
+  .update-source-card.active & {
+    border-color: var(--ide-accent);
+  }
+
+  .radio-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ide-accent);
+  }
+}
+
+.usc-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ide-text-active);
+  flex: 1;
+}
+
+.usc-url {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ide-text-light);
+  font-family: 'JetBrains Mono', monospace;
+  padding-left: 28px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  .el-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+}
+
+.usc-features {
+  display: flex;
+  gap: 6px;
+  padding-left: 28px;
+}
+
+.feature-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.1);
+  color: var(--ide-accent);
+
+  &.diff-badge {
+    background: rgba(103, 194, 58, 0.12);
+    color: #67c23a;
   }
 }
 

@@ -5,6 +5,30 @@ import { autoUpdater } from 'electron-updater'
 
 const PLACEHOLDER_MARKERS = ['example.com', 'your-owner', 'your-repo']
 
+// 内置预设更新源
+const PRESET_UPDATE_SOURCES = [
+  {
+    key: 'gh-proxy-latest',
+    label: 'GitHub',
+    provider: 'generic',
+    // 通过 GH 代理访问 GitHub Releases 的最新版本下载目录
+    url: 'https://gh-proxy.com/https://github.com/Torchman005/PezMax-Desktop/releases/latest/download'
+  },
+  {
+    key: 'gh-proxy-v1',
+    label: 'GitHub (v1.0.0)',
+    provider: 'generic',
+    url: 'https://gh-proxy.com/https://github.com/Torchman005/PezMax-Desktop/releases/download/v1.0.0'
+  },
+  {
+    key: 'github-direct',
+    label: 'GitHub 直连',
+    provider: 'github',
+    owner: 'Torchman005',
+    repo: 'PezMax-Desktop'
+  }
+]
+
 const updateState = {
   currentVersion: app.getVersion(),
   configured: false,
@@ -19,6 +43,7 @@ const updateState = {
 let initialized = false
 let currentWindow = null
 let resolvedFeedConfig = null
+let userOverrideConfig = null
 
 const readTextIfExists = (filePath) => {
   try {
@@ -91,6 +116,12 @@ const resolveFileBasedFeedConfig = () => {
 }
 
 const resolveFeedConfig = () => {
+  // 1. 用户手动配置的更新源 (最高优先级)
+  if (userOverrideConfig) {
+    return userOverrideConfig
+  }
+
+  // 2. 环境变量配置
   const envProvider = normalizeValue(process.env.PTMJ_UPDATE_PROVIDER)
   const envUrl = normalizeValue(process.env.PTMJ_UPDATE_URL)
   const envOwner = normalizeValue(process.env.PTMJ_UPDATE_GH_OWNER)
@@ -115,11 +146,13 @@ const resolveFeedConfig = () => {
     }
   }
 
+  // 3. 文件配置 (electron-builder.yml 等)
   const fileConfig = resolveFileBasedFeedConfig()
   if (fileConfig) {
     return fileConfig
   }
 
+  // 4. 未配置
   return {
     configured: false,
     provider: envProvider || '',
@@ -226,6 +259,60 @@ const ensureUpdaterReady = () => {
 
   applyResolvedConfig()
   emitUpdateStatus()
+}
+
+/**
+ * 根据用户设置中的更新源配置重新设置 autoUpdater feed
+ * @param {Object|null} updateSource - { provider, url, owner, repo } 或 null (清除覆盖)
+ * @returns {Object} 新的 updateState
+ */
+export const configureFromSettings = (updateSource) => {
+  if (updateSource && updateSource.provider) {
+    const provider = normalizeValue(updateSource.provider)
+    const url = normalizeValue(updateSource.url)
+    const owner = normalizeValue(updateSource.owner)
+    const repo = normalizeValue(updateSource.repo)
+
+    if (provider === 'generic' && url && !isPlaceholderValue(url)) {
+      userOverrideConfig = {
+        configured: true,
+        provider: 'generic',
+        url,
+        feedTarget: url
+      }
+    } else if (provider === 'github' && owner && repo && !isPlaceholderValue(owner) && !isPlaceholderValue(repo)) {
+      userOverrideConfig = {
+        configured: true,
+        provider: 'github',
+        owner,
+        repo,
+        feedTarget: `${owner}/${repo}`
+      }
+    } else {
+      userOverrideConfig = {
+        configured: false,
+        provider: 'generic',
+        url: url || '',
+        feedTarget: url || ''
+      }
+    }
+  } else {
+    // 清除用户覆盖，回退到环境变量 / 文件配置
+    userOverrideConfig = null
+  }
+
+  if (initialized) {
+    applyResolvedConfig()
+  }
+
+  return { ...updateState }
+}
+
+/**
+ * 获取内置预设更新源列表
+ */
+export const getPresetUpdateSources = () => {
+  return PRESET_UPDATE_SOURCES.map((source) => ({ ...source }))
 }
 
 export const initUpdater = (browserWindow) => {

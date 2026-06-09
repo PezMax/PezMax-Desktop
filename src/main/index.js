@@ -5,7 +5,7 @@ import { Blob } from 'buffer'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { apiRegistry,findApi } from './main-utils/apiRegistry'
-import { checkForUpdates, downloadUpdate, getUpdateInfo, initUpdater, quitAndInstallUpdate } from './main-utils/updater'
+import { checkForUpdates, configureFromSettings, downloadUpdate, getPresetUpdateSources, getUpdateInfo, initUpdater, quitAndInstallUpdate } from './main-utils/updater'
 
 // ================= 持久化设置与开机自启逻辑 =================
 const settingsPath = join(app.getPath('userData'), 'ptmj-settings.json')
@@ -18,6 +18,7 @@ const defaultSettings = {
   backgroundOpacity: 20,
   backgroundBlur: 0,
   editorVisibility: 72,
+  updateSource: null,  // { provider, url?, owner?, repo? } 用户手动配置的更新源
   autoJumpAfterUpload: true,
   defaultSubject: '',
   defaultYear: '',
@@ -341,15 +342,33 @@ app.whenReady().then(() => {
   })
 
   // Settings IPC
-  ipcMain.handle('get-settings', () => loadSettings())
+  ipcMain.handle('get-settings', () => {
+    const settings = loadSettings()
+    // 启动时同步更新源配置
+    if (settings.updateSource) {
+      configureFromSettings(settings.updateSource)
+    }
+    return settings
+  })
   ipcMain.handle('get-app-version', () => app.getVersion())
   ipcMain.on('save-settings', (event, settings) => {
     saveSettings(settings, mainWindow)
+    // 保存设置时同步更新源配置
+    if (settings.updateSource !== undefined) {
+      configureFromSettings(settings.updateSource || null)
+    }
   })
   ipcMain.handle('update:get-info', () => getUpdateInfo())
   ipcMain.handle('update:check', () => checkForUpdates())
   ipcMain.handle('update:download', () => downloadUpdate())
   ipcMain.handle('update:quit-and-install', () => quitAndInstallUpdate())
+
+  // 更新源配置
+  ipcMain.handle('update:get-preset-sources', () => getPresetUpdateSources())
+  ipcMain.handle('update:configure-source', (event, updateSource) => {
+    const newState = configureFromSettings(updateSource)
+    return newState
+  })
 
   // 处理保存文件
   ipcMain.handle('save-file', async (event, { content, fileName }) => {
