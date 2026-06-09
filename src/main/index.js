@@ -172,8 +172,14 @@ function getWindowBounds(isClientLaunch) {
 }
 
 // LYZ四次修改：抽出窗口模式切换方法，原因：需要在认证页与主页面之间动态切换窗口是否可缩放以及尺寸上下限
+let currentWindowMode = null
+
 function applyWindowMode(mode) {
   if (!mainWindow || mainWindow.isDestroyed()) return
+
+  // 防止重复设置相同模式时重复居中窗口
+  if (mode === currentWindowMode) return
+  currentWindowMode = mode
 
   if (mode === 'auth') {
     mainWindow.setResizable(AUTH_WINDOW_BOUNDS.resizable)
