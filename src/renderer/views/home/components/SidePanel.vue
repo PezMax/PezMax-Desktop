@@ -680,8 +680,8 @@ const handleCoverUploadClick = async () => {
       return
     }
 
-    if (fileInfo.size > 10485760) {
-      ElMessage.warning('封面大小不能超过 10MB')
+    if (fileInfo.size > 20971520) {
+      ElMessage.warning('封面大小不能超过 20MB')
       return
     }
 

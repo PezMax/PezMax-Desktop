@@ -60,13 +60,13 @@ export function getSubjects(query) {
         params: query
     })
 }
-// lxq 文件名搜索，不分页：按关键字查询匹配的文件列表供前端展示
-export function searchFileList(fileName) {
+// lxq 关键字搜索，不分页：同时匹配文件名和学科名称，学科命中优先排列
+export function searchFileList(keyword) {
   return request({
     url: '/datum/file/search',
     method: 'get',
     params: {
-      fileName
+      keyword
     }
   })
 }

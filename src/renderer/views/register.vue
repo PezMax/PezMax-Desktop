@@ -70,6 +70,7 @@
                 >
                   <template #prefix><svg-icon icon-class="user" class="el-input__icon input-icon" /></template>
                 </el-input>
+                <p class="username-hint">本软件与学校无关，各位同学请勿将学号，手机号等注册为账号</p>
               </el-form-item>
 
               <el-form-item prop="password">
@@ -261,6 +262,63 @@
       </div>
     </section>
   </div>
+
+  <!-- 免责声明弹窗 -->
+  <el-dialog
+    v-model="showDisclaimer"
+    :close-on-click-modal="false"
+    :close-on-press-escape="false"
+    :show-close="false"
+    width="620px"
+    custom-class="disclaimer-dialog"
+    top="5vh"
+  >
+    <div class="disclaimer-content">
+      <h2 class="disclaimer-title">用户注册及免责声明</h2>
+      <p class="disclaimer-intro">欢迎注册并使用本平台（以下简称"平台"）。在您点击"同意并注册"前，请务必仔细阅读以下条款。一旦完成注册并使用本平台服务，即视为您已充分理解并同意本声明的全部内容。</p>
+
+      <h3 class="disclaimer-section">一、个人信息保护及非技术原因泄露免责</h3>
+      <p>1. 平台仅提供用户自主上传、分享学习资料及试卷的技术服务，并采取合理的技术措施保护用户个人信息安全。</p>
+      <p>2. 您应妥善保管自己的账号密码，并对通过您账号进行的一切操作承担责任。因您主动泄露密码、出借账号、在不安全网络环境下登录，或因手机、电脑等设备丢失、中毒等非平台技术原因导致的个人信息泄露及任何损失，平台不承担法律责任。</p>
+      <p>3. 您了解并同意，在使用平台过程中可能因与他人互动而自愿披露个人信息（例如在评论区、资料描述中主动留下联系方式等），此类行为带来的后果由您自行承担。</p>
+
+      <h3 class="disclaimer-section">二、资料分享与知识产权声明</h3>
+      <p>1. 您上传、分享的任何资料（包括但不限于笔记、试卷、课件等），均应保证享有合法权利或已获授权，不得侵犯任何第三方的著作权、隐私权、名誉权等合法权益。</p>
+      <p>2. 您上传的付费资料，一经发布即视为您同意以平台设定的方式向其他用户展示及传播。其他用户根据平台规则获取该资料后，可能会将其进一步分享、传播或公开，此行为系用户之间的行为，与平台无关。</p>
+      <p>3. 因用户自行将付费资料转发、公开、二次传播导致资料被非付费用户获取的，平台不承担任何责任。</p>
+
+      <h3 class="disclaimer-section">三、免责条款</h3>
+      <p>1. 平台仅作为技术提供方，为用户提供信息存储空间及分享服务，不对用户上传的资料内容进行实质性审核，不对其真实性、准确性、完整性和合法性做任何保证。</p>
+      <p>2. 用户因使用平台资料产生的任何纠纷（包括但不限于版权纠纷、学业纠纷等）由用户之间自行解决，平台不介入处理，也不承担任何责任。</p>
+      <p>3. 若您发现任何资料侵犯了您的合法权益，请通过平台公布的投诉渠道联系我们，我们将依法采取删除、屏蔽等必要措施。</p>
+
+      <h3 class="disclaimer-section">四、其他</h3>
+      <p>本声明的解释权归平台所有。平台有权在法律允许的范围内对本声明进行修改，修改后的声明一经公布即有效替代原声明，您继续使用平台即视为同意修改后的内容。</p>
+      <p class="disclaimer-warning">如您不同意以上任何条款，请勿注册或使用本平台。</p>
+
+      <div class="disclaimer-tips">
+        <h3 class="disclaimer-section">温馨提示</h3>
+        <p>• 不要在公开资料中夹带个人真实姓名、手机号、学号等隐私信息。</p>
+        <p>• 付费资料一旦发布，请做好可能被传播的心理准备。</p>
+        <p>• 如不慎上传了不应公开的内容，请尽快自行删除或联系管理员处理。</p>
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="disclaimer-footer">
+        <el-button class="ghost-button" @click="declineDisclaimer">不同意</el-button>
+        <el-button
+          type="primary"
+          class="submit-button"
+          :disabled="!canAcceptDisclaimer"
+          @click="acceptDisclaimer"
+        >
+          <span v-if="!canAcceptDisclaimer">请仔细阅读（{{ countdown }}s）</span>
+          <span v-else>同意并注册</span>
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -277,6 +335,10 @@ const router = useRouter()
 const { proxy } = getCurrentInstance()
 
 const step = ref(1)
+const showDisclaimer = ref(false)
+const canAcceptDisclaimer = ref(false)
+const countdown = ref(1)
+let countdownTimer = null
 const registerForm = ref({
   username: "",//LYZ三次修改：将username改为userName，保持与后端DTO字段一致
   password: "",
@@ -369,13 +431,50 @@ function handleRegisterPrev() {
   clearRegisterValidation()
 }
 
+function startCountdown() {
+  canAcceptDisclaimer.value = false
+  countdown.value = 1
+  clearInterval(countdownTimer)
+  countdownTimer = setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      canAcceptDisclaimer.value = true
+    }
+  }, 1000)
+}
+
+function acceptDisclaimer() {
+  if (!canAcceptDisclaimer.value) return
+  showDisclaimer.value = false
+  clearInterval(countdownTimer)
+  countdownTimer = null
+  doRegister()
+}
+
+function declineDisclaimer() {
+  showDisclaimer.value = false
+  clearInterval(countdownTimer)
+  countdownTimer = null
+  canAcceptDisclaimer.value = false
+  router.push('/')
+}
+
 function handleRegisterSubmit() {
   proxy.$refs.registerRef.validate(valid => {
     if (!valid) {
       return
     }
-    loading.value = true
-    register(registerForm.value).then(() => {
+    // 弹出免责声明弹窗
+    showDisclaimer.value = true
+    startCountdown()
+  })
+}
+
+function doRegister() {
+  loading.value = true
+  register(registerForm.value).then(() => {
       //sxm-2026-05-19-修改注册成功提示框样式，使用Flexbox实现文字和按钮完全居中
       ElMessageBox.alert(
         `<p style="
@@ -427,7 +526,6 @@ function handleRegisterSubmit() {
     }).finally(() => {
       loading.value = false
     })
-  })
 }
 
 function getCode() {
@@ -442,6 +540,11 @@ function getCode() {
 }
 
 getCode()
+
+onUnmounted(() => {
+  clearInterval(countdownTimer)
+  countdownTimer = null
+})
 </script>
 
 <style lang='scss' scoped>
@@ -792,6 +895,13 @@ getCode()
   font-size: 15px;
 }
 
+.username-hint {
+  margin: 4px 0 0 4px;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.4;
+}
+
 .input-icon {
   color: #7d96b6;
 }
@@ -1006,6 +1116,114 @@ getCode()
     flex-direction: column !important; /* sxm-2026-05-19 */
     align-items: center !important; /* sxm-2026-05-19 */
     justify-content: center !important; /* sxm-2026-05-19 */
+  }
+}
+
+/* 免责声明弹窗样式 */
+:global(.disclaimer-dialog) {
+  border-radius: 20px;
+  overflow: hidden;
+
+  .el-dialog__header {
+    display: none;
+  }
+
+  .el-dialog__body {
+    padding: 0;
+    max-height: 65vh;
+    overflow-y: auto;
+  }
+
+  .el-dialog__footer {
+    padding: 16px 28px 24px;
+  }
+}
+
+.disclaimer-content {
+  padding: 28px 28px 8px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #444;
+
+  h2.disclaimer-title {
+    margin: 0 0 16px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #17304f;
+    text-align: center;
+  }
+
+  .disclaimer-intro {
+    margin: 0 0 16px;
+    color: #555;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  h3.disclaimer-section {
+    margin: 18px 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #17304f;
+  }
+
+  p {
+    margin: 4px 0;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #555;
+  }
+
+  .disclaimer-warning {
+    margin-top: 12px;
+    color: #e45649;
+    font-weight: 600;
+  }
+
+  .disclaimer-tips {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: rgba(90, 165, 255, 0.06);
+    border-radius: 10px;
+    border: 1px solid rgba(90, 165, 255, 0.12);
+
+    h3 {
+      margin-top: 0;
+      color: #205caa;
+    }
+
+    p {
+      color: #617694;
+      font-size: 12px;
+    }
+  }
+}
+
+.disclaimer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+
+  .submit-button {
+    min-width: 160px;
+
+    &:disabled {
+      background: #c8d6e5;
+      color: #fff;
+      cursor: not-allowed;
+    }
+  }
+
+  .ghost-button {
+    min-width: 88px;
+    border: 1px solid rgba(126, 150, 184, 0.3);
+    background: #fff;
+    color: #617694;
+
+    &:hover {
+      border-color: #e45649;
+      color: #e45649;
+    }
   }
 }
 </style>

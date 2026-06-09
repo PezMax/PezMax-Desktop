@@ -80,17 +80,29 @@
             frameborder="0"
             class="preview-iframe"
           ></iframe>
-          <!-- 图片预览 -->
+          <!-- 图片预览：支持鼠标滚轮缩放 + 拖拽平移，取消点击弹窗 -->
           <div
             v-else-if="['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(currentFileObj.fileExt)"
             class="image-preview-container"
+            @wheel.prevent="onImageWheel"
+            @mousedown="onImageDragStart"
+            @mousemove="onImageDragMove"
+            @mouseup="onImageDragEnd"
+            @mouseleave="onImageDragEnd"
+            @dblclick="resetImageTransform"
           >
-            <el-image
+            <img
               :src="normalizeFileUrl(currentFileObj.url)"
-              :preview-src-list="[normalizeFileUrl(currentFileObj.url)]"
-              fit="contain"
-              class="preview-image"
+              :style="imageTransformStyle"
+              :draggable="false"
+              class="preview-image-zoomable"
+              alt="preview"
             />
+            <!-- 缩放提示和重置按钮 -->
+            <div class="image-zoom-toolbar" v-if="imageScale !== 1">
+              <span class="zoom-percent">{{ Math.round(imageScale * 100) }}%</span>
+              <button class="zoom-reset-btn" @click="resetImageTransform" title="重置缩放">↺</button>
+            </div>
           </div>
           
           <!-- 文本 / Markdown 预览 -->
@@ -784,6 +796,75 @@ const openExternalUrl = (url) => {
     window.open(url, '_blank')
   }
 }
+
+// === 图片缩放与拖拽 ===
+const imageScale = ref(1)
+const imageTranslateX = ref(0)
+const imageTranslateY = ref(0)
+const isDragging = ref(false)
+const dragStartX = ref(0)
+const dragStartY = ref(0)
+const dragTranslateStartX = ref(0)
+const dragTranslateStartY = ref(0)
+
+const MIN_SCALE = 0.2
+const MAX_SCALE = 5
+
+const imageTransformStyle = computed(() => ({
+  transform: `translate(${imageTranslateX.value}px, ${imageTranslateY.value}px) scale(${imageScale.value})`,
+  transformOrigin: 'center center',
+  cursor: isDragging.value ? 'grabbing' : (imageScale.value > 1 ? 'grab' : 'default'),
+  transition: isDragging.value ? 'none' : 'transform 0.15s ease-out'
+}))
+
+// 监听文件切换时重置图片变换
+watch(() => props.activeTab, () => {
+  resetImageTransform()
+})
+
+function clampScale(s) {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s))
+}
+
+function onImageWheel(e) {
+  const delta = e.deltaY > 0 ? -0.1 : 0.1
+  const newScale = clampScale(imageScale.value + delta)
+  imageScale.value = newScale
+  // 缩放到 1 以下时重置平移
+  if (newScale <= 1) {
+    imageTranslateX.value = 0
+    imageTranslateY.value = 0
+  }
+}
+
+function onImageDragStart(e) {
+  if (imageScale.value <= 1) return // 原始大小时无需拖拽，用原生滚动即可
+  e.preventDefault()
+  isDragging.value = true
+  dragStartX.value = e.clientX
+  dragStartY.value = e.clientY
+  dragTranslateStartX.value = imageTranslateX.value
+  dragTranslateStartY.value = imageTranslateY.value
+}
+
+function onImageDragMove(e) {
+  if (!isDragging.value) return
+  const dx = e.clientX - dragStartX.value
+  const dy = e.clientY - dragStartY.value
+  imageTranslateX.value = dragTranslateStartX.value + dx
+  imageTranslateY.value = dragTranslateStartY.value + dy
+}
+
+function onImageDragEnd() {
+  isDragging.value = false
+}
+
+function resetImageTransform() {
+  imageScale.value = 1
+  imageTranslateX.value = 0
+  imageTranslateY.value = 0
+  isDragging.value = false
+}
 </script>
 
 <style scoped lang="scss">
@@ -1399,11 +1480,56 @@ const openExternalUrl = (url) => {
   left: 0;
 }
 
-.preview-image {
+.preview-image-zoomable {
   max-width: 100%;
   max-height: 100%;
   user-select: none;
-  -webkit-user-drag: none; /* 防止浏览器默认拖拽图片行为 */
+  -webkit-user-drag: none;
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.image-zoom-toolbar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 13px;
+  z-index: 10;
+  pointer-events: auto;
+
+  .zoom-percent {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .zoom-reset-btn {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.35);
+    }
+  }
 }
 
 .preview-placeholder {

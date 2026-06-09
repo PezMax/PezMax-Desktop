@@ -497,26 +497,66 @@ const fetchTreeData = async () => {
 // lxq 处理本地搜索，使用防抖技术，在用户输入停止 300ms 后执行搜索
 let searchTimer = null
 
-// lxq 搜索结果归一化：把后端返回的扁平列表统一转换成树组件可识别的文件节点结构
-const normalizeSearchResults = (list) => {
+// lxq 搜索结果归一化：把后端返回的扁平列表按学科分组，学科文件夹排列在最上面
+const normalizeSearchResults = (list, keyword) => {
   if (!Array.isArray(list)) return []
 
-  return list
-    .filter(item => {
-      if (!item || typeof item !== 'object') return false
-      const status = item.fileStatus ?? item.status
-      return status === undefined || status === null || Number(status) !== 2
-    }) // 搜索结果中同样过滤掉 fileStatus 为 2 的文件
-    .map(item => ({
-      ...item,
-      id: item.id || item.fileId || item.notifyId || Math.random().toString(36).slice(2, 11),
-      label: item.label || item.fileName || item.name || '未命名',
-      type: 'file',
-      url: item.url || item.fileUrl || item.previewUrl || '',
-      fileExt: item.fileFormat || item.fileExt || '',
-      fileInfo: item,
-      children: null
-    }))
+  const filtered = list.filter(item => {
+    if (!item || typeof item !== 'object') return false
+    const status = item.fileStatus ?? item.status
+    // 过滤掉未审核（0）和未通过（2）的文件，仅显示审核通过（1）的文件
+    return status === undefined || status === null || (Number(status) !== 0 && Number(status) !== 2)
+  })
+
+  // 将文件转换为树节点
+  const fileNodes = filtered.map(item => ({
+    ...item,
+    id: item.id || item.fileId || item.notifyId || Math.random().toString(36).slice(2, 11),
+    label: item.label || item.fileName || item.name || '未命名',
+    type: 'file',
+    url: item.url || item.fileUrl || item.previewUrl || '',
+    fileExt: item.fileFormat || item.fileExt || '',
+    fileInfo: item,
+    children: null
+  }))
+
+  if (!keyword) return fileNodes
+
+  const kw = keyword.toLowerCase()
+  // 按学科分组：学科命中的文件归入学科文件夹，其余文件单独排列
+  const subjectGroups = {}  // { subjectName: [fileNode, ...] }
+  const otherFiles = []
+
+  fileNodes.forEach(node => {
+    const subject = (node.fileInfo?.fileSubject || '').trim()
+    if (subject && subject.toLowerCase().includes(kw)) {
+      if (!subjectGroups[subject]) {
+        subjectGroups[subject] = []
+      }
+      subjectGroups[subject].push(node)
+    } else {
+      otherFiles.push(node)
+    }
+  })
+
+  // 构建学科文件夹节点，放在结果最上面
+  const result = []
+  const sortedSubjects = Object.keys(subjectGroups).sort()
+  sortedSubjects.forEach(subject => {
+    const children = subjectGroups[subject]
+    result.push({
+      id: `search-subject-${[...subject].reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)}`,
+      label: `${subject}（${children.length}）`,
+      type: 'folder',
+      children,
+      fileInfo: null
+    })
+  })
+
+  // 文件名命中的文件放在学科文件夹之后
+  result.push(...otherFiles)
+
+  return result
 }
 
 // lxq 搜索防抖处理：用户停止输入 300ms 后再向后端发起搜索请求
@@ -536,7 +576,7 @@ const handleLocalSearch = (query) => {
       }
 
       const res = await searchFileList(keyword)
-      const matchedList = normalizeSearchResults(Array.isArray(res) ? res : [])
+      const matchedList = normalizeSearchResults(Array.isArray(res) ? res : [], keyword)
       fileTreeData.value = matchedList
 
 
@@ -633,10 +673,10 @@ const formatTreeData = (nodes) => {
   if (!nodes) return []
   return nodes
     .filter(node => {
-      // 过滤掉 fileStatus 为 2 的文件（完全不显示在列表中）
+      // 过滤掉未审核（0）和未通过（2）的文件，仅显示审核通过（1）的文件
       const entity = node.ptmjFile || node.fileInfo || node
       const status = entity.fileStatus ?? entity.status
-      return status === undefined || status === null || Number(status) !== 2
+      return status === undefined || status === null || (Number(status) !== 0 && Number(status) !== 2)
     })
     .map(node => {
       // 调试：如果找到疑似文件的节点，在控制台打印
