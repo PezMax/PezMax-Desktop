@@ -24,6 +24,10 @@ nsis:
   createDesktopShortcut: always
   # 启用差分/增量更新（生成 .exe.blockmap 文件）
   differentialPackage: true
+  # === 安装向导与目录自定义 ===
+  oneClick: false                        # 启用完整安装向导（关闭一键安装）
+  perMachine: true                       # 安装到 Program Files（所有用户）
+  allowToChangeInstallationDirectory: true # 允许用户选择安装目录
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
