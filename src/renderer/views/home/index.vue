@@ -26,6 +26,10 @@
               @search="handleLocalSearch"
               @refresh="fetchTreeData"
               @open-info="openFileInfo"
+              @download-file="handleContextDownload"
+              @toggle-favorite="handleContextFavorite"
+              @report-file="handleContextReport"
+              @batch-download="handleBatchDownload"
             />
 
             <!-- 拖拽条 -->
@@ -254,6 +258,99 @@ const notifyFilePermissionDenied = () => {
 const openReportDialog = (file) => {
   reportFileInfo.value = file || null
   reportDialogVisible.value = true
+}
+
+// 右键菜单：下载
+const handleContextDownload = (file) => {
+  if (file) handleDownload(file)
+}
+
+// 右键菜单：收藏/取消收藏
+const handleContextFavorite = (file) => {
+  if (file) toggleFavorite(file)
+}
+
+// 右键菜单：举报
+const handleContextReport = (file) => {
+  if (file) openReportDialog(file)
+}
+
+// 右键菜单：批量下载试卷
+const handleBatchDownload = async (paperFiles) => {
+  if (!paperFiles || paperFiles.length === 0) {
+    ElMessage.warning('没有可下载的试卷')
+    return
+  }
+
+  // 选择目标文件夹
+  const folderPath = await window.electronAPI.selectDownloadPath()
+  if (!folderPath) return // 用户取消
+
+  let successCount = 0
+  let failCount = 0
+  isDownloading.value = true
+  downloadPercent.value = 0
+  downloadingFileName.value = `批量下载中... (0/${paperFiles.length})`
+
+  for (let i = 0; i < paperFiles.length; i++) {
+    const file = paperFiles[i]
+    const fileName = file.label || file.fileName || 'unknown'
+    downloadingFileName.value = `批量下载中... (${i + 1}/${paperFiles.length}) ${fileName}`
+
+    try {
+      const fileUrl = file.url || file.fileUrl || (file.fileInfo && file.fileInfo.fileUrl) || ''
+      if (!fileUrl) {
+        failCount++
+        continue
+      }
+
+      const finalUrl = normalizeFileUrl(fileUrl)
+      const response = await fetch(finalUrl, {
+        headers: { 'Authorization': 'Bearer ' + getToken() }
+      })
+
+      if (!response.ok) {
+        failCount++
+        continue
+      }
+
+      const blob = await response.blob()
+      const isBlob = blobValidate(blob)
+      if (!isBlob) {
+        failCount++
+        continue
+      }
+
+      const arrayBuffer = await blob.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+
+      const result = await window.electronAPI.saveFile({
+        content: uint8Array,
+        fileName,
+        folderPath,
+        skipDialog: true
+      })
+
+      if (result.success) {
+        successCount++
+        // 记录下载统计
+        const fileId = getFileId(file)
+        if (fileId) {
+          try { await getPaperFile(fileId) } catch (e) { /* 统计失败不影响下载 */ }
+        }
+      } else {
+        failCount++
+      }
+    } catch (e) {
+      failCount++
+      console.error(`批量下载失败: ${fileName}`, e)
+    }
+
+    downloadPercent.value = Math.round(((i + 1) / paperFiles.length) * 100)
+  }
+
+  isDownloading.value = false
+  ElMessage.success(`批量下载完成：成功 ${successCount} 份，失败 ${failCount} 份`)
 }
 
 const openBookmarkReportDialog = (bookmark) => {

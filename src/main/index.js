@@ -371,16 +371,16 @@ app.whenReady().then(() => {
   })
 
   // 处理保存文件
-  ipcMain.handle('save-file', async (event, { content, fileName }) => {
+  ipcMain.handle('save-file', async (event, { content, fileName, folderPath, skipDialog }) => {
     try {
       const settings = loadSettings()
-      const defaultPath = settings.downloadPath || app.getPath('downloads')
-      const defaultSavePath = join(defaultPath, fileName)
+      const saveDir = folderPath || settings.downloadPath || app.getPath('downloads')
+      const defaultSavePath = join(saveDir, fileName)
 
       let finalFilePath = defaultSavePath
 
-      // 如果没有开启静默下载，则弹出选择框
-      if (!settings.silentDownload) {
+      // 如果没有开启静默下载且未指定跳过对话框，则弹出选择框
+      if (!skipDialog && !settings.silentDownload) {
         const result = await dialog.showSaveDialog(mainWindow, {
           defaultPath: defaultSavePath,
           title: '保存文件',
@@ -399,7 +399,7 @@ app.whenReady().then(() => {
         const base = path.basename(fileName, ext)
         
         while (fs.existsSync(finalFilePath)) {
-          finalFilePath = join(defaultPath, `${base} (${counter})${ext}`)
+          finalFilePath = join(saveDir, `${base} (${counter})${ext}`)
           counter++
         }
       }
