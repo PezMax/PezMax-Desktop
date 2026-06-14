@@ -156,7 +156,10 @@ service.interceptors.response.use(res => {
       }
       return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
     } else if (code === 500) {
-      ElMessage({ message: msg, type: 'error' })
+      // 已知特定错误原因保留原始报错，否则显示通用维护提示
+      const specificPatterns = /上传失败|用户名或密码|用户不存在|账号已被停用|验证码错误|暂不支持|不能为空|格式错误|文件过大|没有权限|非法操作|已被停用|命名错误|大小超过|类型错误|已存在|不支持此文件|封面文件/
+      const displayMsg = specificPatterns.test(msg) ? msg : '系统正在维护，如有需求请联系管理员'
+      ElMessage({ message: displayMsg, type: 'error' })
       return Promise.reject(new Error(msg))
     } else if (code === 601) {
       ElMessage({ message: msg, type: 'warning' })
