@@ -28,7 +28,8 @@ export function register(data) {
       isToken: false
     },
     method: 'post',
-    data: data
+    data: data,
+    timeout: 5000
   })
 }
 

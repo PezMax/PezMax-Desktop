@@ -131,6 +131,7 @@
 <script setup>
 import { ref, watch, getCurrentInstance, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { getCodeImg } from '@/api/login'
 import logo from '@/assets/logo/logo.png'
 import { encrypt, decrypt } from '@/utils/jsencrypt'
@@ -221,7 +222,10 @@ function handleLogin() {
           return acc
         }, {})
         router.push({ path: redirect.value || '/', query: otherQueryParams })
-      }).catch(() => {
+      }).catch((error) => {
+        if (error?.message) {
+          ElMessage({ message: error.message, type: 'error' })
+        }
         if (captchaEnabled.value) {
           getCode()
         }

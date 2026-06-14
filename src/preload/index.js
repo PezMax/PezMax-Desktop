@@ -34,6 +34,8 @@ if (process.contextIsolated) {
       checkForUpdates: () => ipcRenderer.invoke('update:check'),
       downloadUpdate: () => ipcRenderer.invoke('update:download'),
       quitAndInstallUpdate: () => ipcRenderer.invoke('update:quit-and-install'),
+      getPresetUpdateSources: () => ipcRenderer.invoke('update:get-preset-sources'),
+      configureUpdateSource: (updateSource) => ipcRenderer.invoke('update:configure-source', updateSource),
       onUpdateStatus: (callback) => {
         const listener = (event, data) => callback(data)
         ipcRenderer.on('update-status', listener)

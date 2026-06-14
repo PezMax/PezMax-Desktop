@@ -1,5 +1,6 @@
 # electron-updater 开发环境配置（仅用于开发调试，打包时不会被包含）
+# 开发环境下更新检查会被跳过（app.isPackaged === false）
 
 provider: generic
-url: https://example.com/auto-updates
+url: https://gh-proxy.com/https://github.com/Torchman005/PezMax-Desktop/releases/latest/download
 updaterCacheDirName: pezmax-updater

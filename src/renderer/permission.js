@@ -22,8 +22,14 @@ const isWhiteList = (path) => {
   return whiteList.some(pattern => isPathMatch(pattern, path))
 }
 //LYZ四次修改：增加对认证页路由的判断函数
+let lastWindowMode = null
 const syncWindowModeByRoute = (path) => {
-  window.electronAPI?.setWindowMode?.(isPtmjAuthRoute(path) ? 'auth' : 'main')
+  const mode = isPtmjAuthRoute(path) ? 'auth' : 'main'
+  // 仅在窗口模式真正发生变化时才通知主进程，避免每次路由切换都触发窗口居中
+  if (mode !== lastWindowMode) {
+    lastWindowMode = mode
+    window.electronAPI?.setWindowMode?.(mode)
+  }
 }
 
 router.beforeEach((to, from, next) => {

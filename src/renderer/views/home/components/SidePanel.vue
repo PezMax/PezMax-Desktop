@@ -92,13 +92,16 @@
           icon="ArrowRight"
         >
           <template #default="{ node, data }">
-            <div class="custom-tree-node">
+            <div
+              class="custom-tree-node"
+              @contextmenu.prevent="onContextMenu($event, node, data)"
+            >
               <div class="node-left" style="display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden;">
                 <svg-icon :icon-class="data.type === 'file' ? 'documentation' : 'nested'" class="tree-icon" />
                 <span class="tree-label" :title="node.label">
                   {{ showExtension || data.type !== 'file' ? node.label : node.label.replace(/\.[^/.]+$/, '') }}
                 </span>
-                
+
                 <!-- 新增状态标记 -->
                 <span v-if="data.type === 'file' && data.fileInfo" class="tree-status-badge" :class="getStatusClass(data.fileInfo.fileStatus ?? data.fileInfo.status)">
                   {{ getStatusText(data.fileInfo.fileStatus ?? data.fileInfo.status) }}
@@ -188,7 +191,39 @@
       </transition>
     </div>
 
-      <!-- 添加书签弹窗 (Apple/Notion Style) -->
+    <!-- 右键菜单 (teleport 到 body，不受 transition 限制) -->
+    <teleport to="body">
+      <div
+        v-if="contextMenu.visible"
+        class="file-context-menu"
+        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+
+      >
+        <template v-if="contextMenu.isFolder && contextMenu.hasPapers">
+          <div class="menu-item" @click="handleMenuAction('batchDownload')">
+            <svg-icon icon-class="download" class="menu-icon" />
+            <span>批量下载 ({{ contextMenu.paperCount }}份)</span>
+          </div>
+        </template>
+        <template v-else>
+          <div class="menu-item" @click="handleMenuAction('download')">
+            <svg-icon icon-class="download" class="menu-icon" />
+            <span>下载</span>
+          </div>
+          <div class="menu-item" @click="handleMenuAction('favorite')">
+            <svg-icon icon-class="star" class="menu-icon" />
+            <span>收藏</span>
+          </div>
+          <div class="menu-divider"></div>
+          <div class="menu-item menu-item-danger" @click="handleMenuAction('report')">
+            <svg-icon icon-class="warning" class="menu-icon" />
+            <span>举报</span>
+          </div>
+        </template>
+      </div>
+    </teleport>
+
+    <!-- 添加书签弹窗 (Apple/Notion Style) -->
       <el-dialog
         v-model="showAddBookmarkModal"
         title=""
@@ -347,7 +382,126 @@ const clearCover = () => {
   localPreviewUrl.value = ''
 }
 
-const emit = defineEmits(['node-click', 'search', 'refresh', 'change-view', 'open-info'])
+const emit = defineEmits(['node-click', 'search', 'refresh', 'change-view', 'open-info', 'download-file', 'toggle-favorite', 'report-file', 'batch-download'])
+
+// 试卷文件扩展名
+const PAPER_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx']
+
+// 判断节点是否为试卷文件
+const isPaperFile = (node) => {
+  if (node.type !== 'file') return false
+  const ext = (node.fileExt || '').toLowerCase()
+  const label = (node.label || '').toLowerCase()
+  return PAPER_EXTENSIONS.some(e => ext === e || label.endsWith(e))
+}
+
+// 递归收集最小子目录下的试卷文件（仅从叶子目录收集，不重复）
+const collectPapersFromLeafDirs = (folderNode) => {
+  const files = []
+  if (!folderNode.children || folderNode.children.length === 0) return files
+
+  const hasFileChildren = folderNode.children.some(c => c.type === 'file')
+  const hasFolderChildren = folderNode.children.some(c => c.type === 'folder')
+
+  if (hasFileChildren && !hasFolderChildren) {
+    // 最小子目录：只有文件，没有子目录
+    folderNode.children.forEach(c => {
+      if (isPaperFile(c)) files.push(c)
+    })
+  } else {
+    // 有子目录，继续向深处遍历
+    folderNode.children.forEach(c => {
+      if (c.type === 'folder') {
+        files.push(...collectPapersFromLeafDirs(c))
+      }
+    })
+  }
+  return files
+}
+
+// 右键菜单状态
+const contextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  file: null,
+  node: null,
+  isFolder: false,
+  hasPapers: false,
+  paperCount: 0,
+  paperFiles: []
+})
+
+// 防止右击弹出菜单后紧跟的 click 事件立即关闭菜单
+let contextMenuJustOpened = false
+
+const onContextMenu = (event, node, data) => {
+  contextMenu.visible = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.file = data
+  contextMenu.node = node
+  contextMenu.isFolder = data.type === 'folder'
+  contextMenu.hasPapers = false
+  contextMenu.paperCount = 0
+  contextMenu.paperFiles = []
+
+  if (contextMenu.isFolder) {
+    const papers = collectPapersFromLeafDirs(data)
+    if (papers.length > 0) {
+      contextMenu.hasPapers = true
+      contextMenu.paperCount = papers.length
+      contextMenu.paperFiles = papers
+    }
+  }
+
+  contextMenuJustOpened = true
+  setTimeout(() => { contextMenuJustOpened = false }, 0)
+}
+
+const handleMenuAction = (action) => {
+  if (action === 'batchDownload') {
+    if (contextMenu.paperFiles.length === 0) return
+    const papers = [...contextMenu.paperFiles]
+    closeContextMenu()
+    emit('batch-download', papers)
+    return
+  }
+  const file = contextMenu.file
+  if (!file) return
+  closeContextMenu()
+  emit(action === 'download' ? 'download-file'
+    : action === 'favorite' ? 'toggle-favorite'
+    : 'report-file', file)
+}
+
+const closeContextMenu = () => {
+  contextMenu.visible = false
+  contextMenu.file = null
+  contextMenu.node = null
+  contextMenu.isFolder = false
+  contextMenu.hasPapers = false
+  contextMenu.paperCount = 0
+  contextMenu.paperFiles = []
+}
+
+const onDocumentClick = () => {
+  if (contextMenuJustOpened) {
+    contextMenuJustOpened = false
+    return
+  }
+  if (contextMenu.visible) {
+    closeContextMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
+})
 
 // lxq 搜索输入联动：将用户输入的关键字实时传递给父组件执行搜索
 const handleInput = (value) => {
@@ -1031,11 +1185,12 @@ onUnmounted(() => {
 .panel-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
   padding: 0 8px 8px;
-  overflow-x: hidden;
 
   &::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   &::-webkit-scrollbar-thumb {
     background-color: var(--ide-border-hover);
@@ -1633,12 +1788,14 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 200px;
 }
 
 .bookmark-header {
   display: flex;
   align-items: center;
   margin-bottom: 16px;
+  min-width: 180px;
 
   .rounded-search {
     width: 100%;
@@ -1681,6 +1838,7 @@ onUnmounted(() => {
 .bookmark-tree-container {
   display: flex;
   flex-direction: column;
+  min-width: 180px;
 
   .bm-mini-cover {
     width: 16px;
@@ -2239,6 +2397,53 @@ onUnmounted(() => {
       background-color: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.1) !important;
       color: var(--ide-accent) !important;
     }
+  }
+}
+
+/* 右键菜单样式 */
+.file-context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 140px;
+  background: var(--ide-bg, #f5f7fa);
+  border: 1px solid var(--ide-border, #ebeef5);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  padding: 6px 0;
+  font-size: 13px;
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--ide-text, #606266);
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+
+    &:hover {
+      background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.08);
+      color: var(--ide-accent, #409eff);
+    }
+
+    .menu-icon {
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    &.menu-item-danger {
+      &:hover {
+        background: rgba(245, 108, 108, 0.08);
+        color: #f56c6c;
+      }
+    }
+  }
+
+  .menu-divider {
+    height: 1px;
+    margin: 4px 12px;
+    background: var(--ide-border, #ebeef5);
   }
 }
 </style>

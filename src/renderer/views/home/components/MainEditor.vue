@@ -1658,12 +1658,13 @@ function resetImageTransform() {
   align-items: flex-start;
   padding: 40px 20px;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   position: relative;
   background: transparent;
-  
+
   &::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   &::-webkit-scrollbar-thumb {
     background: var(--ide-border);
@@ -1696,6 +1697,7 @@ function resetImageTransform() {
   position: relative;
   z-index: 1;
   width: 100%;
+  min-width: 320px;
   max-width: 860px;
   display: flex;
   flex-direction: column;

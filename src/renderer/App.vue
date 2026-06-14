@@ -53,7 +53,15 @@ onUnmounted(() => {
 }
 .app-main-content {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
+}
+.app-main-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.app-main-content::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
+  border-radius: 3px;
 }
 </style>

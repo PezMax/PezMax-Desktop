@@ -26,6 +26,10 @@
               @search="handleLocalSearch"
               @refresh="fetchTreeData"
               @open-info="openFileInfo"
+              @download-file="handleContextDownload"
+              @toggle-favorite="handleContextFavorite"
+              @report-file="handleContextReport"
+              @batch-download="handleBatchDownload"
             />
 
             <!-- 拖拽条 -->
@@ -117,7 +121,7 @@ import FileInfoDrawer from './components/FileInfoDrawer.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import DonateModal from './components/DonateModal.vue'
 import RankView from '@/views/rank/index.vue'
-import { getFileTree, searchFileList, getPaperFile } from '@/api/datum/file'
+import { getFileTree, getPaperFile } from '@/api/datum/file'
 import { normalizeFileUrl } from '@/utils/url'
 import GlobalLoader from './components/GlobalLoader.vue'
 import { ElMessage } from 'element-plus'
@@ -254,6 +258,99 @@ const notifyFilePermissionDenied = () => {
 const openReportDialog = (file) => {
   reportFileInfo.value = file || null
   reportDialogVisible.value = true
+}
+
+// 右键菜单：下载
+const handleContextDownload = (file) => {
+  if (file) handleDownload(file)
+}
+
+// 右键菜单：收藏/取消收藏
+const handleContextFavorite = (file) => {
+  if (file) toggleFavorite(file)
+}
+
+// 右键菜单：举报
+const handleContextReport = (file) => {
+  if (file) openReportDialog(file)
+}
+
+// 右键菜单：批量下载试卷
+const handleBatchDownload = async (paperFiles) => {
+  if (!paperFiles || paperFiles.length === 0) {
+    ElMessage.warning('没有可下载的试卷')
+    return
+  }
+
+  // 选择目标文件夹
+  const folderPath = await window.electronAPI.selectDownloadPath()
+  if (!folderPath) return // 用户取消
+
+  let successCount = 0
+  let failCount = 0
+  isDownloading.value = true
+  downloadPercent.value = 0
+  downloadingFileName.value = `批量下载中... (0/${paperFiles.length})`
+
+  for (let i = 0; i < paperFiles.length; i++) {
+    const file = paperFiles[i]
+    const fileName = file.label || file.fileName || 'unknown'
+    downloadingFileName.value = `批量下载中... (${i + 1}/${paperFiles.length}) ${fileName}`
+
+    try {
+      const fileUrl = file.url || file.fileUrl || (file.fileInfo && file.fileInfo.fileUrl) || ''
+      if (!fileUrl) {
+        failCount++
+        continue
+      }
+
+      const finalUrl = normalizeFileUrl(fileUrl)
+      const response = await fetch(finalUrl, {
+        headers: { 'Authorization': 'Bearer ' + getToken() }
+      })
+
+      if (!response.ok) {
+        failCount++
+        continue
+      }
+
+      const blob = await response.blob()
+      const isBlob = blobValidate(blob)
+      if (!isBlob) {
+        failCount++
+        continue
+      }
+
+      const arrayBuffer = await blob.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+
+      const result = await window.electronAPI.saveFile({
+        content: uint8Array,
+        fileName,
+        folderPath,
+        skipDialog: true
+      })
+
+      if (result.success) {
+        successCount++
+        // 记录下载统计
+        const fileId = getFileId(file)
+        if (fileId) {
+          try { await getPaperFile(fileId) } catch (e) { /* 统计失败不影响下载 */ }
+        }
+      } else {
+        failCount++
+      }
+    } catch (e) {
+      failCount++
+      console.error(`批量下载失败: ${fileName}`, e)
+    }
+
+    downloadPercent.value = Math.round(((i + 1) / paperFiles.length) * 100)
+  }
+
+  isDownloading.value = false
+  ElMessage.success(`批量下载完成：成功 ${successCount} 份，失败 ${failCount} 份`)
 }
 
 const openBookmarkReportDialog = (bookmark) => {
@@ -494,72 +591,34 @@ const fetchTreeData = async () => {
   }
 }
 // 侧边栏搜索逻辑
-// lxq 处理本地搜索，使用防抖技术，在用户输入停止 300ms 后执行搜索
+// lxq 本地搜索：直接在已有文件树中按文件夹名筛选，排除单个文件，不发起后端请求
 let searchTimer = null
 
-// lxq 搜索结果归一化：把后端返回的扁平列表按学科分组，学科文件夹排列在最上面
-const normalizeSearchResults = (list, keyword) => {
-  if (!Array.isArray(list)) return []
+// lxq 在树中递归搜索匹配的文件夹节点，只返回文件夹，排除文件节点
+const filterFolders = (nodes, kw) => {
+  if (!Array.isArray(nodes)) return []
 
-  const filtered = list.filter(item => {
-    if (!item || typeof item !== 'object') return false
-    const status = item.fileStatus ?? item.status
-    // 过滤掉未审核（0）和未通过（2）的文件，仅显示审核通过（1）的文件
-    return status === undefined || status === null || (Number(status) !== 0 && Number(status) !== 2)
-  })
-
-  // 将文件转换为树节点
-  const fileNodes = filtered.map(item => ({
-    ...item,
-    id: item.id || item.fileId || item.notifyId || Math.random().toString(36).slice(2, 11),
-    label: item.label || item.fileName || item.name || '未命名',
-    type: 'file',
-    url: item.url || item.fileUrl || item.previewUrl || '',
-    fileExt: item.fileFormat || item.fileExt || '',
-    fileInfo: item,
-    children: null
-  }))
-
-  if (!keyword) return fileNodes
-
-  const kw = keyword.toLowerCase()
-  // 按学科分组：学科命中的文件归入学科文件夹，其余文件单独排列
-  const subjectGroups = {}  // { subjectName: [fileNode, ...] }
-  const otherFiles = []
-
-  fileNodes.forEach(node => {
-    const subject = (node.fileInfo?.fileSubject || '').trim()
-    if (subject && subject.toLowerCase().includes(kw)) {
-      if (!subjectGroups[subject]) {
-        subjectGroups[subject] = []
-      }
-      subjectGroups[subject].push(node)
-    } else {
-      otherFiles.push(node)
-    }
-  })
-
-  // 构建学科文件夹节点，放在结果最上面
   const result = []
-  const sortedSubjects = Object.keys(subjectGroups).sort()
-  sortedSubjects.forEach(subject => {
-    const children = subjectGroups[subject]
-    result.push({
-      id: `search-subject-${[...subject].reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)}`,
-      label: `${subject}（${children.length}）`,
-      type: 'folder',
-      children,
-      fileInfo: null
+  const walk = (list) => {
+    list.forEach(node => {
+      const isFolder = node.type === 'folder' || (node.children && node.children.length > 0)
+      if (!isFolder) return // 跳过文件节点
+
+      const label = (node.label || '').toLowerCase()
+      if (label.includes(kw)) {
+        result.push(node)
+      }
+      // 递归搜索子文件夹
+      if (node.children && node.children.length > 0) {
+        walk(node.children)
+      }
     })
-  })
-
-  // 文件名命中的文件放在学科文件夹之后
-  result.push(...otherFiles)
-
+  }
+  walk(nodes)
   return result
 }
 
-// lxq 搜索防抖处理：用户停止输入 300ms 后再向后端发起搜索请求
+// lxq 搜索防抖处理：用户停止输入 300ms 后在本地文件树中筛选
 const handleLocalSearch = (query) => {
   const keyword = (query || '').trim()
 
@@ -567,28 +626,16 @@ const handleLocalSearch = (query) => {
     clearTimeout(searchTimer)
   }
 
-  searchTimer = setTimeout(async () => {
-    try {
-      // lxq  清空搜索时恢复原始文件树，避免搜索状态影响资源管理器展示
-      if (!keyword) {
-        fileTreeData.value = allFileTreeData.value
-        return
-      }
-
-      const res = await searchFileList(keyword)
-      const matchedList = normalizeSearchResults(Array.isArray(res) ? res : [], keyword)
-      fileTreeData.value = matchedList
-
-
-    } catch (error) {
-      if (error?.response?.status === 403) {
-        fileTreeData.value = []
-        notifyFilePermissionDenied()
-        return
-      }
-      console.error('搜索文件失败:', error)
-      ElMessage.error('搜索文件失败')
+  searchTimer = setTimeout(() => {
+    // 清空搜索时恢复原始文件树
+    if (!keyword) {
+      fileTreeData.value = allFileTreeData.value
+      return
     }
+
+    // 在已有文件树中筛选匹配的文件夹
+    const matchedList = filterFolders(allFileTreeData.value, keyword.toLowerCase())
+    fileTreeData.value = matchedList
   }, 300)
 }
 // 获取并格式化后端返回的文件树
