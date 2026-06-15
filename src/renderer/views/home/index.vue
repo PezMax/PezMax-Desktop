@@ -696,6 +696,20 @@ onMounted(async () => {
   setTimeout(() => {
     isAppLoading.value = false
   }, 400)
+
+  // 检查是否有从其他页面（如收藏页）跳转过来需要打开的文件
+  const pendingFile = sessionStorage.getItem('pendingOpenFile')
+  if (pendingFile) {
+    sessionStorage.removeItem('pendingOpenFile')
+    try {
+      const fileData = JSON.parse(pendingFile)
+      setTimeout(() => {
+        handleNodeClick(fileData)
+      }, 600)
+    } catch (e) {
+      console.warn('解析待打开文件数据失败:', e)
+    }
+  }
 })
 
 // 视图切换
