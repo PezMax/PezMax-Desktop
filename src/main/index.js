@@ -6,6 +6,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { apiRegistry,findApi } from './main-utils/apiRegistry'
 import { checkForUpdates, configureFromSettings, downloadUpdate, getPresetUpdateSources, getUpdateInfo, initUpdater, quitAndInstallUpdate } from './main-utils/updater'
+import { insertDownloadRecord, listDownloadRecords, deleteDownloadRecord, flushDb, closeDatabase } from './main-utils/database'
 
 // ================= 持久化设置与开机自启逻辑 =================
 const settingsPath = join(app.getPath('userData'), 'ptmj-settings.json')
@@ -300,6 +301,8 @@ ipcMain.handle('call-api', async (event, apiName, ...args) => {
 app.on('will-quit', () => {
   // 注销所有全局快捷键
   globalShortcut.unregisterAll()
+  // 关闭 SQLite 数据库
+  closeDatabase()
 })
 
 // This method will be called when Electron has finished
@@ -412,6 +415,57 @@ app.whenReady().then(() => {
     } catch (error) {
       console.error('保存文件失败:', error)
       return { success: false, message: error.message }
+    }
+  })
+
+  // 用系统默认程序打开文件
+  ipcMain.handle('open-path', async (event, filePath) => {
+    return shell.openPath(filePath)
+  })
+
+  // ================= 本地下载记录（SQLite） =================
+  ipcMain.handle('download:list', async (event, userId) => {
+    try {
+      const rows = await listDownloadRecords(userId)
+      return { success: true, rows }
+    } catch (e) {
+      console.error('[download:list] 查询下载记录失败:', e)
+      return { success: false, rows: [], message: e.message }
+    }
+  })
+
+  ipcMain.handle('download:add', async (event, record) => {
+    try {
+      console.log('[download:add] 收到记录:', JSON.stringify(record))
+      await insertDownloadRecord(record)
+      // 不自动刷盘 — 由调用方决定何时 flush
+      return { success: true }
+    } catch (e) {
+      console.error('[download:add] 插入下载记录失败:', e)
+      return { success: false, message: e.message }
+    }
+  })
+
+  ipcMain.handle('download:delete', async (event, { userId, fileId }) => {
+    try {
+      console.log('[download:delete] userId=', userId, 'fileId=', fileId)
+      await deleteDownloadRecord(userId, fileId)
+      // deleteDownloadRecord 内部已 saveDb
+      return { success: true }
+    } catch (e) {
+      console.error('[download:delete] 删除下载记录失败:', e)
+      return { success: false, message: e.message }
+    }
+  })
+
+  // 批量下载完成后一次性刷盘
+  ipcMain.handle('download:flush', async () => {
+    try {
+      flushDb()
+      return { success: true }
+    } catch (e) {
+      console.error('[download:flush] 刷盘失败:', e)
+      return { success: false, message: e.message }
     }
   })
 

@@ -115,7 +115,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, Download, DocumentCopy, Warning, Select } from '@element-plus/icons-vue'
+import { CopyDocument, Download, DocumentCopy, Warning, Select, Star, StarFilled } from '@element-plus/icons-vue'
 import { normalizeAvatar } from '@/utils/avatar'
 import { getFile } from '@/api/datum/file'
 import { getUser } from '@/api/datum/user'
