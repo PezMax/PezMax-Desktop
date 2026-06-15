@@ -88,6 +88,39 @@
             <el-form-item label="资源名称">
               <el-input v-model="uploadForm.fileName" placeholder="给这份资料起个清晰的名字" class="modern-input" />
             </el-form-item>
+            <el-form-item label="学校名称">
+              <el-autocomplete
+                v-model="uploadForm.fileSchool"
+                :fetch-suggestions="querySearchSchool"
+                placeholder="如: 齐鲁工业大学"
+                class="modern-input w-full"
+                clearable
+                @select="handleSchoolSelect"
+                @focus="handleSchoolFocus"
+                @blur="handleSchoolBlur"
+                :trigger-on-focus="true"
+                :debounce="300"
+                popper-class="modern-autocomplete-popper"
+              >
+                <template #default="{ item }">
+                  <!-- 正常匹配的学校项 -->
+                  <div class="subject-suggestion-item" v-if="!item.isEmptyTip">
+                    <span>{{ item.value }}</span>
+                    <span class="subject-count" v-if="item.count">({{ item.count }})</span>
+                  </div>
+                  <!-- 无匹配结果时的灵动提示项 -->
+                  <div class="subject-empty-item" v-else>
+                    <div class="empty-icon-pulse">
+                      <el-icon><Warning /></el-icon>
+                    </div>
+                    <div class="empty-text">
+                      <span class="empty-title">未找到匹配学校</span>
+                      <span class="empty-desc">提交后将作为新学校创建</span>
+                    </div>
+                  </div>
+                </template>
+              </el-autocomplete>
+            </el-form-item>
             <el-form-item label="所属学科">
               <el-autocomplete
                 v-model="uploadForm.fileSubject"
@@ -186,11 +219,92 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import logo from '@/assets/logo/logo.png'
 import { getToken } from '@/utils/auth'
-import { getSubjects } from '@/api/datum/file' // 引入获取科目的接口
+import { getSubjects, getSchools, checkSchoolExists } from '@/api/datum/file' // 引入获取科目和学校的接口
 import { Warning, CircleClose, Close } from '@element-plus/icons-vue' // 引入警告图标
 import useUploadStore from '@/store/modules/upload'
 
 const uploadStore = useUploadStore()
+
+// ======== 学校联想补全逻辑 ========
+// 存储当前请求到的所有学校，以便在提交时进行校验
+const existingSchools = ref([])
+
+// focus 时请求热门学校
+const handleSchoolFocus = async () => {
+  // 如果输入框有值，不触发默认热门，让 querySearchSchool 去处理搜索
+  if (uploadForm.fileSchool) return
+
+  try {
+    const res = await getSchools({ limit: 10 })
+    if (res.code === 200 && res.data) {
+      existingSchools.value = res.data
+    }
+  } catch (error) {
+    console.error('获取热门学校失败:', error)
+  }
+}
+
+const querySearchSchool = async (queryString, cb) => {
+  try {
+    // 构造请求参数，带 keyword 则模糊搜索，否则查热门
+    const params = { limit: 10 }
+    if (queryString) {
+      params.keyword = queryString
+    }
+
+    const res = await getSchools(params)
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      // 每次请求回来都更新 existingSchools，确保能判断当前输入是否是新学校
+      existingSchools.value = res.data
+      cb(res.data)
+    } else {
+      // 如果查询没有结果，则返回一个特定的"空提示"对象
+      cb([{ value: queryString || '无匹配', isEmptyTip: true }])
+    }
+  } catch (error) {
+    console.error('获取学校联想列表失败:', error)
+    cb([{ value: queryString || '请求异常', isEmptyTip: true }])
+  }
+}
+
+const handleSchoolSelect = (item) => {
+  // 如果用户点击了"无匹配提示项"，则将输入框还原为刚才输入的内容
+  if (item.isEmptyTip) {
+    setTimeout(() => {
+      uploadForm.fileSchool = uploadForm.fileSchool.replace('无匹配', '').replace('请求异常', '')
+    }, 0)
+    return
+  }
+  console.log('选择了已存在的学校:', item.value)
+}
+
+const handleSchoolBlur = async (event) => {
+  const value = event.target.value
+  if (value && value.trim()) {
+    try {
+      const res = await checkSchoolExists(value.trim())
+      if (res.code === 200 && res.data) {
+        // 提示用户该学校已存在
+        await ElMessageBox.confirm(
+          '该学校已存在，是否使用已有学校？',
+          '提示',
+          {
+            confirmButtonText: '使用已有',
+            cancelButtonText: '继续使用',
+            type: 'warning',
+            customClass: 'modern-message-box'
+          }
+        ).then(() => {
+          // 用户选择使用已有学校，保持当前输入
+        }).catch(() => {
+          // 用户继续使用当前输入
+        })
+      }
+    } catch (error) {
+      console.error('检查学校名称失败:', error)
+    }
+  }
+}
 
 // ======== 科目联想补全逻辑 ========
 // 存储当前请求到的所有科目，以便在提交时进行校验
@@ -270,16 +384,19 @@ let dragCounter = 0 // 记录进入/离开的层级深度，防止内部元素�
 onMounted(async () => {
   try {
     if (window.electronAPI && window.electronAPI.getSettings) {
-      const settings = await window.electronAPI.getSettings()
-      if (settings) {
-        if (settings.defaultSubject && !uploadForm.fileSubject) {
-          uploadForm.fileSubject = settings.defaultSubject
-        }
-        if (settings.defaultYear && !uploadForm.fileYear) {
-          uploadForm.fileYear = settings.defaultYear
+        const settings = await window.electronAPI.getSettings()
+        if (settings) {
+          if (!uploadForm.fileSchool) {
+            uploadForm.fileSchool = settings.defaultSchool || ''
+          }
+          if (settings.defaultSubject && !uploadForm.fileSubject) {
+            uploadForm.fileSubject = settings.defaultSubject
+          }
+          if (settings.defaultYear && !uploadForm.fileYear) {
+            uploadForm.fileYear = settings.defaultYear
+          }
         }
       }
-    }
   } catch (error) {
     console.error('读取默认上传设置失败:', error)
   }
@@ -440,6 +557,12 @@ const handleCancelUpload = async () => {
 const submitUpload = async () => {
   if (!selectedFile.value) {
     ElMessage.warning('请先选择需要上传的文件')
+    return
+  }
+  
+  const currentSchool = uploadForm.fileSchool.trim()
+  if (!currentSchool) {
+    ElMessage.warning('请填写学校名称')
     return
   }
   

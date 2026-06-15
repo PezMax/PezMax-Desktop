@@ -28,6 +28,7 @@
       <el-table-column label="文件名称" prop="fileName" min-width="220" />
       <el-table-column label="文件类型" prop="fileFormat" min-width="120" />
       <el-table-column label="文件大小" prop="fileSize" min-width="140" />
+      <el-table-column label="学校" prop="school" min-width="120" />
       <el-table-column label="科目" prop="subject" min-width="120" />
       <el-table-column label="操作" width="132" align="center" class-name="action-column" header-class-name="action-column">
         <template #default="{ row }">
@@ -144,6 +145,7 @@ const buildFileMeta = async (row) => {
     fileName: row.fileName || `文件-${row.fileId}`,
     fileFormat: row.fileFormat || '-',
     fileSize: formatFileSizeBytes(row.fileSize),
+    school: row.fileSchool || row.school || '-',
     subject: row.fileSubject || row.subject || '-'
   }
 }
@@ -179,7 +181,7 @@ const loadList = async () => {
     list.value = keyword
       ? rows.filter((item) => {
         const fields = activeType.value === 'file'
-          ? [item.fileName]
+          ? [item.fileName, item.school, item.subject]
           : [item.title, item.url, item.collection, item.subject, item.description]
         return fields.some((value) => `${value || ''}`.toLowerCase().includes(keyword))
       })

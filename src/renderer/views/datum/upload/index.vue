@@ -20,7 +20,7 @@
       </div>
       <el-input
         v-model.trim="query.keyword"
-        :placeholder="activeType === 'file' ? '按文件名或科目筛选' : '按标题、链接或专栏筛选'"
+        :placeholder="activeType === 'file' ? '按文件名、学校或科目筛选' : '按标题、链接或专栏筛选'"
         clearable
         class="search-input"
         @keyup.enter="loadCurrentList"
@@ -40,6 +40,7 @@
       empty-text="暂无上传文件"
     >
       <el-table-column label="文件名称" prop="fileName" min-width="220" show-overflow-tooltip />
+      <el-table-column label="学校" prop="fileSchool" min-width="120" show-overflow-tooltip />
       <el-table-column label="科目" prop="fileSubject" min-width="120" show-overflow-tooltip />
       <el-table-column label="年份" prop="fileYear" width="92" />
       <el-table-column label="状态" width="112">
@@ -122,6 +123,9 @@
       <el-form ref="fileFormRef" :model="fileForm" label-width="86px" class="edit-form">
         <el-form-item label="文件名称" prop="fileName">
           <el-input v-model.trim="fileForm.fileName" maxlength="120" show-word-limit />
+        </el-form-item>
+        <el-form-item label="学校名称" prop="fileSchool">
+          <el-input v-model.trim="fileForm.fileSchool" maxlength="60" show-word-limit placeholder="请输入学校名称" />
         </el-form-item>
         <el-form-item label="科目" prop="fileSubject">
           <el-input v-model.trim="fileForm.fileSubject" maxlength="60" show-word-limit />
@@ -235,7 +239,7 @@ const filteredFiles = computed(() => {
   const keyword = query.keyword.toLowerCase()
   if (!keyword) return files.value
   return files.value.filter((item) => {
-    return [item.fileName, item.fileSubject, item.remark]
+    return [item.fileName, item.fileSchool, item.fileSubject, item.remark]
       .some((value) => `${value || ''}`.toLowerCase().includes(keyword))
   })
 })

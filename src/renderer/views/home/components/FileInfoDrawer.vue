@@ -35,6 +35,11 @@
         <div class="info-section animate-item item-2">
           <h3 class="section-title">基本信息</h3>
           <div class="info-grid">
+            <div class="info-card copyable" @click="copyText(fileInfo.fileSchool || '', '学校名称')">
+              <span class="info-label">学校名称</span>
+              <span class="info-value">{{ fileInfo.fileSchool || '-' }}</span>
+              <el-icon class="copy-icon"><CopyDocument /></el-icon>
+            </div>
             <div class="info-card copyable" @click="copyText(fileInfo.fileSubject || '未分类', '文件科目')">
               <span class="info-label">文件科目</span>
               <span class="info-value">{{ fileInfo.fileSubject || '未分类' }}</span>

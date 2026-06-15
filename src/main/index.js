@@ -21,6 +21,7 @@ const defaultSettings = {
   editorVisibility: 72,
   updateSource: null,  // { provider, url?, owner?, repo? } 用户手动配置的更新源
   autoJumpAfterUpload: true,
+  defaultSchool: '',
   defaultSubject: '',
   defaultYear: '',
   silentDownload: false,

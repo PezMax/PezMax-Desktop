@@ -11,6 +11,7 @@ const useUploadStore = defineStore('upload', {
     uploadErrorMsg: '',
     uploadForm: {
       fileName: '',
+      fileSchool: '',
       fileSubject: '',
       fileYear: '',
       fileType: null
@@ -34,6 +35,9 @@ const useUploadStore = defineStore('upload', {
       this.uploadErrorMsg = ''
       this.uploadProgress = { current: 0, total: 0 }
       this.uploadForm.fileName = ''
+      this.uploadForm.fileSchool = ''
+      this.uploadForm.fileSubject = ''
+      this.uploadForm.fileYear = ''
       this.uploadForm.fileType = null
       this.isUploading = false
       this.isCancelled = false
@@ -42,6 +46,7 @@ const useUploadStore = defineStore('upload', {
       if (window.electronAPI && window.electronAPI.getSettings) {
         window.electronAPI.getSettings().then(settings => {
           if (settings) {
+            this.uploadForm.fileSchool = settings.defaultSchool || ''
             this.uploadForm.fileSubject = settings.defaultSubject || ''
             this.uploadForm.fileYear = settings.defaultYear || ''
           }
@@ -76,6 +81,7 @@ const useUploadStore = defineStore('upload', {
         if (!this.selectedFile.isFolder) {
           const metadata = {
             fileName: this.uploadForm.fileName,
+            fileSchool: this.uploadForm.fileSchool || '',
             fileSubject: this.uploadForm.fileSubject,
             fileYear: this.uploadForm.fileYear,
             fileType: this.uploadForm.fileType,
@@ -130,6 +136,7 @@ const useUploadStore = defineStore('upload', {
 
             const metadata = {
               fileName: safeFileName,
+              fileSchool: this.uploadForm.fileSchool || '',
               fileSubject: this.uploadForm.fileSubject,
               fileYear: this.uploadForm.fileYear,
               fileType: this.uploadForm.fileType,

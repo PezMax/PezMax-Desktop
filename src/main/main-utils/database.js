@@ -33,6 +33,7 @@ async function getDb() {
       file_size INTEGER DEFAULT 0,
       file_format TEXT DEFAULT '',
       file_subject TEXT DEFAULT '',
+      file_school TEXT DEFAULT '',
       file_year INTEGER DEFAULT NULL,
       file_type INTEGER DEFAULT NULL,
       local_path TEXT DEFAULT '',
@@ -40,6 +41,15 @@ async function getDb() {
       download_time TEXT DEFAULT (datetime('now','localtime'))
     )
   `)
+  
+  // 为旧数据库添加新字段（向后兼容）
+  try {
+    db.run('ALTER TABLE download_records ADD COLUMN file_school TEXT DEFAULT ""')
+    console.log('[download-db] 已添加 file_school 字段到现有表')
+  } catch (e) {
+    // 字段可能已存在，忽略错误
+    console.log('[download-db] file_school 字段已存在或数据库初始化中')
+  }
   saveDb()
   console.log('[download-db] 数据库初始化完成')
   return db
@@ -81,8 +91,8 @@ export async function insertDownloadRecord(record) {
   const userId = Number(record.userId) || null
   console.log('[download-db] 插入记录: fileId=', fileId, 'fileName=', record.fileName, 'userId=', userId)
   db.run(
-    `INSERT INTO download_records (file_id, file_name, file_url, file_size, file_format, file_subject, file_year, file_type, local_path, user_id)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO download_records (file_id, file_name, file_url, file_size, file_format, file_subject, file_school, file_year, file_type, local_path, user_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     [
       fileId,
       record.fileName || '',
@@ -90,6 +100,7 @@ export async function insertDownloadRecord(record) {
       Number(record.fileSize) || 0,
       record.fileFormat || '',
       record.fileSubject || '',
+      record.fileSchool || '',
       record.fileYear != null ? Number(record.fileYear) : null,
       record.fileType != null ? Number(record.fileType) : null,
       record.localPath || '',

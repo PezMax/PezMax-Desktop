@@ -8,7 +8,12 @@
     </div>
 
     <div class="top-bar">
-      <el-input v-model.trim="query.subject" placeholder="按科目筛选" clearable @keyup.enter="loadList">
+      <el-input v-model.trim="query.school" placeholder="按学校筛选" clearable @keyup.enter="loadList" style="max-width: 240px">
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+      <el-input v-model.trim="query.subject" placeholder="按科目筛选" clearable @keyup.enter="loadList" style="max-width: 240px">
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
@@ -18,6 +23,7 @@
     </div>
 
     <el-table v-loading="loading" :data="pagedList" class="panel-table" empty-text="暂无下载记录">
+      <el-table-column label="学校" prop="school" min-width="140" />
       <el-table-column label="科目" prop="subject" min-width="120" />
       <el-table-column label="文件名称" min-width="180">
         <template #default="{ row }">
@@ -88,6 +94,7 @@ const currentUserId = ref('')
 const query = reactive({
   pageNum: 1,
   pageSize: 10,
+  school: '',
   subject: ''
 })
 
@@ -122,6 +129,7 @@ const normalizeRecord = (row) => {
     fileId: row.file_id || row.fileId,
     fileFormat: row.file_format || row.fileFormat || '-',
     fileSize: row.file_size != null ? Number(row.file_size) : Number(row.fileSize) || 0,
+    school: row.file_school || row.fileSchool || row.school || '-',
     subject: row.file_subject || row.fileSubject || row.subject || '-',
     fileUrl: row.file_url || row.fileUrl || '',
     localPath: row.local_path || row.localPath || '',
@@ -151,9 +159,14 @@ const loadList = async () => {
     const rows = res.rows || []
     const normalized = rows.map(normalizeRecord)
     console.log('[download-page] 规范化后记录数:', normalized.length)
-    const keyword = query.subject.toLowerCase()
-    list.value = keyword
-      ? normalized.filter((item) => (item.subject || '').toLowerCase().includes(keyword))
+    const schoolKeyword = query.school.toLowerCase()
+    const subjectKeyword = query.subject.toLowerCase()
+    list.value = (schoolKeyword || subjectKeyword)
+      ? normalized.filter((item) => {
+          const schoolMatch = !schoolKeyword || (item.school || '').toLowerCase().includes(schoolKeyword)
+          const subjectMatch = !subjectKeyword || (item.subject || '').toLowerCase().includes(subjectKeyword)
+          return schoolMatch && subjectMatch
+        })
       : normalized
     total.value = list.value.length
     query.pageNum = 1
@@ -164,6 +177,7 @@ const loadList = async () => {
 }
 
 const resetQuery = () => {
+  query.school = ''
   query.subject = ''
   query.pageNum = 1
   loadList()
@@ -227,7 +241,10 @@ const openFile = async (row) => {
         fileUrl: row.fileUrl || '',
         fileSize: row.fileSize || 0,
         fileFormat: row.fileFormat || '',
+        fileSchool: row.school || '',
         fileSubject: row.subject || '',
+        fileYear: row.fileYear != null ? Number(row.fileYear) : null,
+        fileType: row.fileType != null ? Number(row.fileType) : null,
         localPath: saveResult.filePath,
         userId: uid ? Number(uid) : null
       })
