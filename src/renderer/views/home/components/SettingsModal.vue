@@ -89,6 +89,22 @@
 
                       <div class="divider"></div>
 
+                      <!-- 默认学校 -->
+                      <div class="setting-item input-item">
+                        <div class="setting-info">
+                          <span class="setting-label">默认学校 (可选)</span>
+                          <span class="setting-desc">设置后，每次打开上传表单时自动填好</span>
+                        </div>
+                        <el-input
+                          v-model="settingsData.defaultSchool"
+                          placeholder="例如: 齐鲁工业大学"
+                          class="modern-input"
+                          clearable
+                        />
+                      </div>
+
+                      <div class="divider"></div>
+
                       <!-- 默认学科 -->
                       <div class="setting-item input-item">
                         <div class="setting-info">
@@ -687,6 +703,7 @@ const settingsData = reactive({
   editorVisibility: 72,  // 主编辑区背景可见度，数值越高越透明
   showEmptyEditorTip: true, // 默认显示空状态提示
   autoJumpAfterUpload: true,
+  defaultSchool: '',
   defaultSubject: '',
   defaultYear: '',
   silentDownload: false,

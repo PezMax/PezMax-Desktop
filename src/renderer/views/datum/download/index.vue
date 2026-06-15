@@ -3,26 +3,47 @@
     <div v-if="!props.embedded" class="page-hero">
       <div>
         <h3>我的下载</h3>
-        <p>当前账号的下载记录，按文件名称筛选。</p>
+        <p>当前账号的下载记录，按科目筛选。</p>
       </div>
     </div>
 
     <div class="top-bar">
-      <el-input v-model.trim="query.fileName" placeholder="按文件名称筛选" clearable @keyup.enter="loadList">
+      <el-input v-model.trim="query.school" placeholder="按学校筛选" clearable @keyup.enter="loadList" style="max-width: 240px">
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+      <el-input v-model.trim="query.subject" placeholder="按科目筛选" clearable @keyup.enter="loadList" style="max-width: 240px">
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
       <el-button class="reset-btn" @click="resetQuery">重置</el-button>
+      <el-button class="reset-btn" @click="openDownloadFolder">打开下载目录</el-button>
     </div>
 
     <el-table v-loading="loading" :data="pagedList" class="panel-table" empty-text="暂无下载记录">
-      <el-table-column label="文件名称" prop="fileName" min-width="220" />
-      <el-table-column label="文件类型" prop="fileFormat" min-width="120" />
-      <el-table-column label="文件大小" prop="fileSize" min-width="140" />
+      <el-table-column label="学校" prop="school" min-width="140" />
       <el-table-column label="科目" prop="subject" min-width="120" />
-      <el-table-column label="操作" width="132" align="center" class-name="action-column" header-class-name="action-column">
+      <el-table-column label="文件名称" min-width="180">
         <template #default="{ row }">
+          <el-tooltip :content="row.fileName" placement="top" :show-after="400">
+            <span>{{ truncateFileName(row.fileName) }}</span>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column label="文件类型" prop="fileFormat" min-width="120" />
+      <el-table-column label="文件大小" min-width="120">
+        <template #default="{ row }">
+          <span>{{ formatFileSize(row.fileSize) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="180" align="center" class-name="action-column" header-class-name="action-column">
+        <template #default="{ row }">
+          <el-button class="row-action open-action" :loading="row._opening" @click="openFile(row)">
+            <el-icon :size="15"><FolderOpened /></el-icon>
+            <span>打开</span>
+          </el-button>
           <el-button class="row-action delete-action" @click="removeItem(row)">
             <el-icon :size="15"><Delete /></el-icon>
             <span>删除</span>
@@ -53,10 +74,10 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Delete, Download as DownloadIcon } from '@element-plus/icons-vue'
+import { Search, Delete, Download as DownloadIcon, FolderOpened } from '@element-plus/icons-vue'
+import axios from 'axios'
 import useUserStore from '@/store/modules/user'
-import { getInfo } from '@/api/login'
-import { listDownload, delDesktopDownload } from '@/api/datum/download'
+import { getToken } from '@/utils/auth'
 
 defineOptions({ name: 'DownloadPage' })
 const props = defineProps({
@@ -73,32 +94,46 @@ const currentUserId = ref('')
 const query = reactive({
   pageNum: 1,
   pageSize: 10,
-  fileName: ''
+  school: '',
+  subject: ''
 })
 
-function formatFileSizeBytes(val) {
+const baseURL = import.meta.env.VITE_APP_BASE_API
+
+function formatFileSize(val) {
   if (val === null || val === undefined || val === '') return '-'
   const n = Number(val)
-  if (!Number.isFinite(n)) return `${val} 字节`
-  return `${Math.trunc(n)} 字节`
+  if (!Number.isFinite(n) || n < 0) return '-'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
-const resolveCurrentUser = async () => {
-  if (userStore.id) {
-    currentUserId.value = `${userStore.id}`
-    return
-  }
-  const info = await getInfo()
-  currentUserId.value = `${info?.user?.userId || ''}`
+function truncateFileName(name) {
+  if (!name) return '-'
+  return name.length > 10 ? name.slice(0, 10) + '...' : name
 }
 
-const buildFileMeta = async (row) => {
+const resolveCurrentUser = () => {
+  const id = userStore.id ? Number(userStore.id) : 0
+  currentUserId.value = id || ''
+  console.log('[download-page] 当前用户ID:', currentUserId.value)
+  return currentUserId.value
+}
+
+const normalizeRecord = (row) => {
   return {
     ...row,
-    fileName: row.fileName || `文件-${row.fileId}`,
-    fileFormat: row.fileFormat || '-',
-    fileSize: formatFileSizeBytes(row.fileSize),
-    subject: row.fileSubject || row.subject || '-'
+    fileName: row.file_name || row.fileName || `文件-${row.file_id || row.fileId}`,
+    fileId: row.file_id || row.fileId,
+    fileFormat: row.file_format || row.fileFormat || '-',
+    fileSize: row.file_size != null ? Number(row.file_size) : Number(row.fileSize) || 0,
+    school: row.file_school || row.fileSchool || row.school || '-',
+    subject: row.file_subject || row.fileSubject || row.subject || '-',
+    fileUrl: row.file_url || row.fileUrl || '',
+    localPath: row.local_path || row.localPath || '',
+    downloadTime: row.download_time || row.downloadTime || ''
   }
 }
 
@@ -110,16 +145,29 @@ const syncPagedList = () => {
 const loadList = async () => {
   loading.value = true
   try {
-    if (!currentUserId.value) {
-      await resolveCurrentUser()
+    const uid = resolveCurrentUser()
+    console.log('[download-page] 加载下载记录, userId=', uid)
+    const res = await window.electronAPI.downloadRecords.list(uid || null)
+    console.log('[download-page] IPC 返回:', res)
+    if (!res || !res.success) {
+      console.warn('[download-page] 查询下载记录失败:', res?.message)
+      list.value = []
+      total.value = 0
+      pagedList.value = []
+      return
     }
-    const res = await listDownload({ pageNum: 1, pageSize: 1000, userId: currentUserId.value })
-    const onlyVisible = res.rows || []
-    const withFileMeta = await Promise.all(onlyVisible.map(buildFileMeta))
-    const keyword = query.fileName.toLowerCase()
-    list.value = keyword
-      ? withFileMeta.filter((item) => (item.fileName || '').toLowerCase().includes(keyword))
-      : withFileMeta
+    const rows = res.rows || []
+    const normalized = rows.map(normalizeRecord)
+    console.log('[download-page] 规范化后记录数:', normalized.length)
+    const schoolKeyword = query.school.toLowerCase()
+    const subjectKeyword = query.subject.toLowerCase()
+    list.value = (schoolKeyword || subjectKeyword)
+      ? normalized.filter((item) => {
+          const schoolMatch = !schoolKeyword || (item.school || '').toLowerCase().includes(schoolKeyword)
+          const subjectMatch = !subjectKeyword || (item.subject || '').toLowerCase().includes(subjectKeyword)
+          return schoolMatch && subjectMatch
+        })
+      : normalized
     total.value = list.value.length
     query.pageNum = 1
     syncPagedList()
@@ -129,14 +177,103 @@ const loadList = async () => {
 }
 
 const resetQuery = () => {
-  query.fileName = ''
+  query.school = ''
+  query.subject = ''
   query.pageNum = 1
   loadList()
 }
 
+const openDownloadFolder = async () => {
+  const settings = await window.electronAPI.getSettings()
+  const downloadDir = settings?.downloadPath || ''
+  if (!downloadDir) {
+    ElMessage.warning('未设置下载目录')
+    return
+  }
+  const openError = await window.electronAPI.openPath(downloadDir)
+  if (openError) {
+    ElMessage.error(`打开下载目录失败：${openError}`)
+  }
+}
+
+const openFile = async (row) => {
+  if (row._opening) return
+  row._opening = true
+  try {
+    const fileName = row.fileName
+    // 1. 先从本地路径尝试直接打开（如果记录中有 localPath）
+    const localPath = row.localPath || ''
+    if (localPath) {
+      const openError = await window.electronAPI.openPath(localPath)
+      if (!openError) return
+    }
+    // 2. 再从下载目录尝试
+    const settings = await window.electronAPI.getSettings()
+    const downloadDir = settings?.downloadPath || ''
+    if (downloadDir) {
+      const dirPath = `${downloadDir.replace(/[/\\]$/, '')}/${fileName}`
+      const openError = await window.electronAPI.openPath(dirPath)
+      if (!openError) return
+    }
+    // 3. 本地文件不存在，提示后重新下载
+    ElMessage.warning('本地文件已删除或移动，正在重新下载...')
+    const url = `${baseURL}/datum/download/file?fileId=${row.fileId}`
+    const res = await axios.get(url, {
+      responseType: 'blob',
+      headers: { Authorization: 'Bearer ' + getToken() }
+    })
+    const blob = new Blob([res.data])
+    const downloadFileName = decodeURIComponent(res.headers['download-filename'] || fileName)
+    const arrayBuffer = await blob.arrayBuffer()
+    const buffer = new Uint8Array(arrayBuffer)
+    const saveResult = await window.electronAPI.saveFile({
+      content: buffer,
+      fileName: downloadFileName,
+      skipDialog: true
+    })
+    if (saveResult && saveResult.success && saveResult.filePath) {
+      // 更新本地记录中的 localPath
+      const uid = resolveCurrentUser()
+      console.log('[download-page] 重新下载完成，记录到SQLite: fileId=', row.fileId, 'localPath=', saveResult.filePath)
+      await window.electronAPI.downloadRecords.add({
+        fileId: row.fileId,
+        fileName: row.fileName,
+        fileUrl: row.fileUrl || '',
+        fileSize: row.fileSize || 0,
+        fileFormat: row.fileFormat || '',
+        fileSchool: row.school || '',
+        fileSubject: row.subject || '',
+        fileYear: row.fileYear != null ? Number(row.fileYear) : null,
+        fileType: row.fileType != null ? Number(row.fileType) : null,
+        localPath: saveResult.filePath,
+        userId: uid ? Number(uid) : null
+      })
+      await window.electronAPI.downloadRecords.flush()
+      const openResult = await window.electronAPI.openPath(saveResult.filePath)
+      if (openResult) {
+        ElMessage.error(`打开文件失败：${openResult}`)
+      }
+    } else if (saveResult && saveResult.reason !== 'canceled') {
+      ElMessage.error('保存文件失败')
+    }
+  } catch (e) {
+    console.error('打开文件失败:', e)
+    ElMessage.error('打开文件失败，请重试')
+  } finally {
+    row._opening = false
+  }
+}
+
 const removeItem = async (row) => {
   await ElMessageBox.confirm(`确认删除下载记录「${row.fileName}」吗？`, '提示', { type: 'warning' })
-  await delDesktopDownload(currentUserId.value, row.fileId)
+  const uid = resolveCurrentUser()
+  console.log('[download-page] 删除记录: userId=', uid, 'fileId=', row.fileId)
+  const res = await window.electronAPI.downloadRecords.delete(uid || '', row.fileId)
+  console.log('[download-page] 删除结果:', res)
+  if (!res || !res.success) {
+    ElMessage.error('删除失败: ' + (res?.message || '未知错误'))
+    return
+  }
   ElMessage.success('记录已删除')
   loadList()
 }

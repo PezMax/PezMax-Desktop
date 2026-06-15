@@ -16,7 +16,7 @@
           <span>书签</span>
         </button>
       </div>
-      <el-input v-model.trim="query.keyword" :placeholder="activeType === 'file' ? '按文件名称筛选' : '按书签标题、链接或专栏筛选'" clearable @keyup.enter="loadList">
+      <el-input v-model.trim="query.keyword" :placeholder="activeType === 'file' ? '按科目筛选' : '按书签标题、链接或专栏筛选'" clearable @keyup.enter="loadList">
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
@@ -25,12 +25,20 @@
     </div>
 
     <el-table v-if="activeType === 'file'" v-loading="loading" :data="pagedList" class="panel-table" empty-text="暂无收藏文件">
+      <el-table-column label="科目" prop="subject" min-width="120" />
       <el-table-column label="文件名称" prop="fileName" min-width="220" />
       <el-table-column label="文件类型" prop="fileFormat" min-width="120" />
       <el-table-column label="文件大小" prop="fileSize" min-width="140" />
-      <el-table-column label="科目" prop="subject" min-width="120" />
-      <el-table-column label="操作" width="132" align="center" class-name="action-column" header-class-name="action-column">
+      <el-table-column label="学校" prop="school" min-width="120" />
+      <el-table-column label="操作" width="260" align="center" class-name="action-column" header-class-name="action-column">
         <template #default="{ row }">
+          <el-button class="row-action download-action" :loading="downloadingIds.has(row.fileId)" @click="downloadFile(row)">
+            <el-icon><Download /></el-icon>
+            <span>下载</span>
+          </el-button>
+          <el-button class="row-action jump-action" @click="jumpToFile(row)">
+            <span>跳转</span>
+          </el-button>
           <el-button class="row-action favorite-action" :loading="removingIds.has(row.fileId)" @click="removeItem(row)">
             <svg class="heart-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 21.35 10.55 20.03C5.4 15.36 2 12.27 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 3C19.58 3 22 5.42 22 8.5c0 3.77-3.4 6.86-8.55 11.54L12 21.35z" />
@@ -86,18 +94,23 @@
 
 <script setup>
 import { reactive, ref, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Star } from '@element-plus/icons-vue'
+import { Search, Star, Download } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
 import { getInfo } from '@/api/login'
 import { listFavorite, delFavorite } from '@/api/datum/favorite'
 import { listFavoriteBookmark, delBookmarkFavorite } from '@/api/datum/bookmarkFavorite'
+import { getToken } from '@/utils/auth'
+import { normalizeFileUrl } from '@/utils/url'
+import { blobValidate } from '@/utils/ruoyi'
 
 defineOptions({ name: 'FavoritePage' })
 const props = defineProps({
   embedded: { type: Boolean, default: false }
 })
 const userStore = useUserStore()
+const router = useRouter()
 
 const loading = ref(false)
 const list = ref([])
@@ -105,6 +118,7 @@ const pagedList = ref([])
 const total = ref(0)
 const currentUserId = ref('')
 const removingIds = reactive(new Set())
+const downloadingIds = reactive(new Set())
 const activeType = ref('file')
 
 const query = reactive({
@@ -126,7 +140,19 @@ function formatFileSizeBytes(val) {
   if (val === null || val === undefined || val === '') return '-'
   const n = Number(val)
   if (!Number.isFinite(n)) return `${val} 字节`
-  return `${Math.trunc(n)} 字节`
+  if (n < 1024) return `${Math.trunc(n)} B`
+  const kb = n / 1024
+  if (kb < 1024) return `${kb.toFixed(1)} KB`
+  const mb = kb / 1024
+  if (mb < 1024) return `${mb.toFixed(1)} MB`
+  const gb = mb / 1024
+  return `${gb.toFixed(2)} GB`
+}
+
+function truncateFileName(name) {
+  if (!name) return '-'
+  if (name.length <= 10) return name
+  return name.slice(0, 10) + '....'
 }
 
 const resolveCurrentUser = async () => {
@@ -141,9 +167,10 @@ const resolveCurrentUser = async () => {
 const buildFileMeta = async (row) => {
   return {
     ...row,
-    fileName: row.fileName || `文件-${row.fileId}`,
+    fileName: truncateFileName(row.fileName) || `文件-${row.fileId}`,
     fileFormat: row.fileFormat || '-',
     fileSize: formatFileSizeBytes(row.fileSize),
+    school: row.fileSchool || row.school || '-',
     subject: row.fileSubject || row.subject || '-'
   }
 }
@@ -179,7 +206,7 @@ const loadList = async () => {
     list.value = keyword
       ? rows.filter((item) => {
         const fields = activeType.value === 'file'
-          ? [item.fileName]
+          ? [item.subject]
           : [item.title, item.url, item.collection, item.subject, item.description]
         return fields.some((value) => `${value || ''}`.toLowerCase().includes(keyword))
       })
@@ -218,6 +245,86 @@ const removeItem = async (row) => {
   } finally {
     removingIds.delete(id)
   }
+}
+
+const downloadFile = async (row) => {
+  const fileId = row.fileId
+  const fileName = row.fileName || `文件-${fileId}`
+  const fileUrl = row.fileUrl
+
+  if (!fileUrl) {
+    ElMessage.error('该文件缺少下载地址')
+    return
+  }
+
+  downloadingIds.add(fileId)
+  try {
+    const finalUrl = normalizeFileUrl(fileUrl)
+    const response = await fetch(finalUrl, {
+      headers: { 'Authorization': 'Bearer ' + getToken() }
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const blob = await response.blob()
+    if (!blobValidate(blob)) {
+      const text = await blob.text()
+      try {
+        const rsp = JSON.parse(text)
+        ElMessage.error(rsp.msg || '下载失败')
+      } catch {
+        ElMessage.error('下载失败，返回格式错误')
+      }
+      return
+    }
+
+    const buf = await blob.arrayBuffer()
+    const result = await window.electronAPI.saveFile({
+      content: new Uint8Array(buf),
+      fileName
+    })
+
+    if (result.success) {
+      ElMessage.success(`下载完成: ${fileName}`)
+      try {
+        const record = {
+          fileId: Number(fileId) || 0,
+          fileName,
+          fileUrl,
+          fileSize: Number(row.fileSize) || 0,
+          fileFormat: row.fileFormat || '',
+          fileSchool: row.fileSchool || '',
+          fileSubject: row.fileSubject || '',
+          fileYear: row.fileYear != null ? Number(row.fileYear) : null,
+          fileType: row.fileType != null ? Number(row.fileType) : null,
+          localPath: result.filePath || '',
+          userId: userStore.id ? Number(userStore.id) : null
+        }
+        await window.electronAPI.downloadRecords.add(record)
+        await window.electronAPI.downloadRecords.flush()
+      } catch (e) {
+        console.warn('记录下载失败:', e)
+      }
+    } else if (result.reason !== 'canceled') {
+      ElMessage.error(`保存失败: ${result.message || '未知错误'}`)
+    }
+  } catch (e) {
+    console.error('下载出错:', e)
+    ElMessage.error('下载失败，请检查网络')
+  } finally {
+    downloadingIds.delete(fileId)
+  }
+}
+
+const jumpToFile = (row) => {
+  const fileData = {
+    id: row.fileId,
+    label: row.fileName,
+    url: row.fileUrl,
+    type: 'file',
+    fileInfo: { ...row }
+  }
+  sessionStorage.setItem('pendingOpenFile', JSON.stringify(fileData))
+  router.push('/index')
 }
 
 watch(activeType, () => {

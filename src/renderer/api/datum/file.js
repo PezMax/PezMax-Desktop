@@ -60,6 +60,25 @@ export function getSubjects(query) {
         params: query
     })
 }
+
+// 获取学校联想列表
+export function getSchools(query) {
+    return request({
+        url: '/datum/file/schools',
+        method: 'get',
+        params: query
+    })
+}
+
+// 检查学校名称是否已存在
+export function checkSchoolExists(schoolName) {
+    return request({
+        url: '/datum/file/schools/check',
+        method: 'get',
+        params: { schoolName }
+    })
+}
+
 // lxq 关键字搜索，不分页：同时匹配文件名和学科名称，学科命中优先排列
 export function searchFileList(keyword) {
   return request({
@@ -77,6 +96,6 @@ export function getPaperFile(fileId) {
     url: '/datum/download/file',
     method: 'get',
     params: { fileId },
-    responseType: 'blob' // 必须设置，否则获取到的流会损坏
+    responseType: 'blob' // 必须设置，否则获取到的流会损坏       
   })
 }

@@ -30,6 +30,7 @@ if (process.contextIsolated) {
       downloadFileDirectly: (data) => ipcRenderer.invoke('download-file-directly', data), // 触发底层下载
       onDownloadProgress: (callback) => ipcRenderer.on('download-progress', (event, data) => callback(data)), // 监听下载进度
       clearAppCache: () => ipcRenderer.invoke('clear-app-cache'), // 清除应用缓存
+      openPath: (filePath) => ipcRenderer.invoke('open-path', filePath), // 用系统默认程序打开文件
       getUpdateInfo: () => ipcRenderer.invoke('update:get-info'),
       checkForUpdates: () => ipcRenderer.invoke('update:check'),
       downloadUpdate: () => ipcRenderer.invoke('update:download'),
@@ -41,7 +42,14 @@ if (process.contextIsolated) {
         ipcRenderer.on('update-status', listener)
         return () => ipcRenderer.removeListener('update-status', listener)
       },
-      platform: process.platform // 暴露当前操作系统类型 (darwin, win32, linux)
+      platform: process.platform, // 暴露当前操作系统类型 (darwin, win32, linux)
+      // 本地下载记录（SQLite）
+      downloadRecords: {
+        list: (userId) => ipcRenderer.invoke('download:list', userId),
+        add: (record) => ipcRenderer.invoke('download:add', record),
+        delete: (userId, fileId) => ipcRenderer.invoke('download:delete', { userId, fileId }),
+        flush: () => ipcRenderer.invoke('download:flush')
+      }
     })
   } catch (error) {
     console.error(error)

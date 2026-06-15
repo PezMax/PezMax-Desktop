@@ -121,7 +121,7 @@ import FileInfoDrawer from './components/FileInfoDrawer.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import DonateModal from './components/DonateModal.vue'
 import RankView from '@/views/rank/index.vue'
-import { getFileTree, getPaperFile } from '@/api/datum/file'
+import { getFileTree } from '@/api/datum/file'
 import { normalizeFileUrl } from '@/utils/url'
 import GlobalLoader from './components/GlobalLoader.vue'
 import { ElMessage } from 'element-plus'
@@ -333,10 +333,28 @@ const handleBatchDownload = async (paperFiles) => {
 
       if (result.success) {
         successCount++
-        // 记录下载统计
-        const fileId = getFileId(file)
-        if (fileId) {
-          try { await getPaperFile(fileId) } catch (e) { /* 统计失败不影响下载 */ }
+        // 每下载成功一个文件，立即写入并刷盘（等同于多次单独下载）
+        const fId = getFileId(file)
+        if (fId && window.electronAPI?.downloadRecords) {
+          const src = file?.originalData || file
+          try {
+            const record = {
+              fileId: Number(fId) || 0,
+              fileName,
+              fileUrl: src?.fileUrl || src?.url || '',
+              fileSize: Number(src?.fileSize) || 0,
+              fileFormat: src?.fileFormat || '',
+              fileSchool: src?.fileSchool || '',
+              fileSubject: src?.fileSubject || '',
+              fileYear: src?.fileYear != null ? Number(src?.fileYear) : null,
+              fileType: src?.fileType != null ? Number(src?.fileType) : null,
+              localPath: result.filePath || '',
+              userId: userStore.id ? Number(userStore.id) : null
+            }
+            console.log('[batch-download] 写入单条记录并刷盘:', record.fileName)
+            await window.electronAPI.downloadRecords.add(record)
+            await window.electronAPI.downloadRecords.flush()
+          } catch (e) { console.warn('[batch-download] 记录写入失败:', e) }
         }
       } else {
         failCount++
@@ -678,6 +696,20 @@ onMounted(async () => {
   setTimeout(() => {
     isAppLoading.value = false
   }, 400)
+
+  // 检查是否有从其他页面（如收藏页）跳转过来需要打开的文件
+  const pendingFile = sessionStorage.getItem('pendingOpenFile')
+  if (pendingFile) {
+    sessionStorage.removeItem('pendingOpenFile')
+    try {
+      const fileData = JSON.parse(pendingFile)
+      setTimeout(() => {
+        handleNodeClick(fileData)
+      }, 600)
+    } catch (e) {
+      console.warn('解析待打开文件数据失败:', e)
+    }
+  }
 })
 
 // 视图切换
@@ -926,7 +958,7 @@ const handleDownload = async (fileData) => {
       isDownloading.value = false
       return
     }
-    
+
     // 4. 将 Blob 转为 Uint8Array 传给主进程保存
     const arrayBuffer = await blob.arrayBuffer()
     const uint8Array = new Uint8Array(arrayBuffer)
@@ -944,12 +976,27 @@ const handleDownload = async (fileData) => {
         ElMessage.success(`下载完成: ${fileName}`)
       }, 500)
 
-      // 6. 下载并保存成功后，再调用后端接口进行统计
+      // 6. 下载成功后记录到本地 SQLite（弃用服务端 MySQL 下载记录）
       try {
-        await getPaperFile(fileId)
-        console.log('下载统计已记录:', fileId)
-      } catch (statErr) {
-        console.warn('下载统计记录失败，但不影响文件保存:', statErr)
+        const record = {
+          fileId: Number(fileId) || 0,
+          fileName,
+          fileUrl: fileData.fileUrl || fileData.url || '',
+          fileSize: Number(fileData.fileSize) || 0,
+          fileFormat: fileData.fileFormat || '',
+          fileSchool: fileData.fileSchool || '',
+          fileSubject: fileData.fileSubject || '',
+          fileYear: fileData.fileYear != null ? Number(fileData.fileYear) : null,
+          fileType: fileData.fileType != null ? Number(fileData.fileType) : null,
+          localPath: result.filePath || '',
+          userId: userStore.id ? Number(userStore.id) : null
+        }
+        console.log('[home] 保存本地下载记录:', JSON.stringify(record))
+        await window.electronAPI.downloadRecords.add(record)
+        await window.electronAPI.downloadRecords.flush()
+        console.log('[home] 本地下载记录已保存: fileId=', fileId)
+      } catch (recordErr) {
+        console.warn('[home] 本地下载记录保存失败，但不影响文件:', recordErr)
       }
     } else {
       isDownloading.value = false
