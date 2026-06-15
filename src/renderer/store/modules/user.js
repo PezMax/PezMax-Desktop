@@ -2,6 +2,7 @@ import router from '@/router'
 import { ElMessageBox, } from 'element-plus'
 import { login, logout, getInfo } from '@/api/login'
 import { getToken, setToken, removeToken } from '@/utils/auth'
+import { removeStorageItem } from '@/utils/clientStorage'
 import useLockStore from '@/store/modules/lock'
 import { normalizeAvatar } from '@/utils/avatar'
 import defAva from '@/assets/images/default_avatar.jpg'
@@ -108,6 +109,9 @@ const useUserStore = defineStore(
             this.roles = []
             this.permissions = []
             removeToken()
+            // 清除密码缓存，保留账号
+            removeStorageItem('password')
+            removeStorageItem('rememberMe')
             resolve()
           }).catch(error => {
             reject(error)
