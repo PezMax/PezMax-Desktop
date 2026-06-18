@@ -22,25 +22,37 @@
       <el-button class="reset-btn" @click="openDownloadFolder">打开下载目录</el-button>
     </div>
 
-    <el-table v-loading="loading" :data="pagedList" class="panel-table" empty-text="暂无下载记录">
-      <el-table-column label="学校" prop="school" min-width="140" />
-      <el-table-column label="科目" prop="subject" min-width="120" />
+    <el-table v-loading="loading" :data="pagedList" class="panel-table" empty-text="暂无下载记录" :row-class-name="tableRowClassName">
+      <el-table-column label="学校" prop="school" min-width="140">
+        <template #default="{ row }">
+          <span :class="{ 'text-missing': row._fileMissing }">{{ row.school }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="科目" prop="subject" min-width="120">
+        <template #default="{ row }">
+          <span :class="{ 'text-missing': row._fileMissing }">{{ row.subject }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="文件名称" min-width="180">
         <template #default="{ row }">
           <el-tooltip :content="row.fileName" placement="top" :show-after="400">
-            <span>{{ truncateFileName(row.fileName) }}</span>
+            <span :class="{ 'text-missing': row._fileMissing }">{{ truncateFileName(row.fileName) }}</span>
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column label="文件类型" prop="fileFormat" min-width="120" />
+      <el-table-column label="文件类型" prop="fileFormat" min-width="120">
+        <template #default="{ row }">
+          <span :class="{ 'text-missing': row._fileMissing }">{{ row.fileFormat }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="文件大小" min-width="120">
         <template #default="{ row }">
-          <span>{{ formatFileSize(row.fileSize) }}</span>
+          <span :class="{ 'text-missing': row._fileMissing }">{{ formatFileSize(row.fileSize) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="180" align="center" class-name="action-column" header-class-name="action-column">
         <template #default="{ row }">
-          <el-button class="row-action open-action" :loading="row._opening" @click="openFile(row)">
+          <el-button v-if="!row._fileMissing" class="row-action open-action" :loading="row._opening" @click="openFile(row)">
             <el-icon :size="15"><FolderOpened /></el-icon>
             <span>打开</span>
           </el-button>
@@ -118,7 +130,6 @@ function truncateFileName(name) {
 const resolveCurrentUser = () => {
   const id = userStore.id ? Number(userStore.id) : 0
   currentUserId.value = id || ''
-  console.log('[download-page] 当前用户ID:', currentUserId.value)
   return currentUserId.value
 }
 
@@ -137,9 +148,34 @@ const normalizeRecord = (row) => {
   }
 }
 
+const tableRowClassName = ({ row }) => {
+  return row._fileMissing ? 'row-file-missing' : ''
+}
+
 const syncPagedList = () => {
   const start = (query.pageNum - 1) * query.pageSize
   pagedList.value = list.value.slice(start, start + query.pageSize)
+}
+
+const checkFilesExist = async (records) => {
+  if (!records.length) return
+  try {
+    const settings = await window.electronAPI.getSettings()
+    const downloadDir = settings?.downloadPath || ''
+    const checkPayload = records.map(r => ({
+      fileId: r.fileId,
+      localPath: r.localPath || '',
+      fileName: r.fileName || ''
+    }))
+    const res = await window.electronAPI.downloadRecords.checkFiles(checkPayload, downloadDir)
+    if (res && res.success && res.result) {
+      records.forEach(r => {
+        r._fileMissing = !res.result[r.fileId]
+      })
+    }
+  } catch (e) {
+    console.error('[download-page] 检查文件存在性失败:', e)
+  }
 }
 
 const loadList = async () => {
@@ -159,6 +195,10 @@ const loadList = async () => {
     const rows = res.rows || []
     const normalized = rows.map(normalizeRecord)
     console.log('[download-page] 规范化后记录数:', normalized.length)
+
+    // 检查本地文件是否存在
+    await checkFilesExist(normalized)
+
     const schoolKeyword = query.school.toLowerCase()
     const subjectKeyword = query.subject.toLowerCase()
     list.value = (schoolKeyword || subjectKeyword)
@@ -249,6 +289,8 @@ const openFile = async (row) => {
         userId: uid ? Number(uid) : null
       })
       await window.electronAPI.downloadRecords.flush()
+      // 文件重新存在了，刷新状态
+      row._fileMissing = false
       const openResult = await window.electronAPI.openPath(saveResult.filePath)
       if (openResult) {
         ElMessage.error(`打开文件失败：${openResult}`)
@@ -265,17 +307,32 @@ const openFile = async (row) => {
 }
 
 const removeItem = async (row) => {
-  await ElMessageBox.confirm(`确认删除下载记录「${row.fileName}」吗？`, '提示', { type: 'warning' })
-  const uid = resolveCurrentUser()
-  console.log('[download-page] 删除记录: userId=', uid, 'fileId=', row.fileId)
-  const res = await window.electronAPI.downloadRecords.delete(uid || '', row.fileId)
-  console.log('[download-page] 删除结果:', res)
-  if (!res || !res.success) {
-    ElMessage.error('删除失败: ' + (res?.message || '未知错误'))
-    return
+  await ElMessageBox.confirm(`确认删除下载记录「${row.fileName}」吗？${row._fileMissing ? '（本地文件已不存在，仅删除记录）' : '（将同时删除本地文件）'}`, '提示', { type: 'warning' })
+  try {
+    // 1. 先删除本地文件（如果存在）
+    const settings = await window.electronAPI.getSettings()
+    const downloadDir = settings?.downloadPath || ''
+    await window.electronAPI.downloadRecords.deleteLocalFile(
+      row.localPath || '',
+      row.fileName || '',
+      downloadDir
+    )
+    // 2. 删除 SQLite 记录
+    const uid = resolveCurrentUser()
+    console.log('[download-page] 删除记录: userId=', uid, 'fileId=', row.fileId)
+    const res = await window.electronAPI.downloadRecords.delete(uid || '', row.fileId)
+    console.log('[download-page] 删除结果:', res)
+    if (!res || !res.success) {
+      ElMessage.error('删除失败: ' + (res?.message || '未知错误'))
+      return
+    }
+    ElMessage.success('已删除')
+    loadList()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    console.error('删除失败:', e)
+    ElMessage.error('删除失败，请重试')
   }
-  ElMessage.success('记录已删除')
-  loadList()
 }
 
 onMounted(loadList)
@@ -399,6 +456,15 @@ defineExpose({ refresh: loadList, total })
   width: 100%;
   line-height: normal;
 }
+
+/* 本地文件已不存在的行 — 更淡灰色，明显区分于正常记录 */
+:deep(.panel-table .row-file-missing td.el-table__cell) {
+  color: #c8c8c8 !important;
+}
+.text-missing {
+  color: #c8c8c8;
+}
+
 .pager-wrap {
   margin-top: 16px;
   display: flex;

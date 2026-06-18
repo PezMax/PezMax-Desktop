@@ -50,7 +50,9 @@ if (process.contextIsolated) {
         list: (userId) => ipcRenderer.invoke('download:list', userId),
         add: (record) => ipcRenderer.invoke('download:add', record),
         delete: (userId, fileId) => ipcRenderer.invoke('download:delete', { userId, fileId }),
-        flush: () => ipcRenderer.invoke('download:flush')
+        flush: () => ipcRenderer.invoke('download:flush'),
+        checkFiles: (records, downloadDir) => ipcRenderer.invoke('download:check-files', { records, downloadDir }),
+        deleteLocalFile: (localPath, fileName, downloadDir) => ipcRenderer.invoke('download:delete-local-file', { localPath, fileName, downloadDir })
       }
     })
   } catch (error) {
