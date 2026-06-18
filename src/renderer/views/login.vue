@@ -8,7 +8,7 @@
         <img :src="logo" alt="logo" class="app-logo" />
       </div>
       <h1 class="scene-title">{{ title }}</h1>
-      <p class="scene-description">登录拼图满绩，免费获取工大试卷，发现高价值学习资料。</p>
+      <p class="scene-description">登录拼图满绩，发现高价值学习资料。</p>
 
       <div class="scene-stage">
         <div class="stage-grid"></div>
@@ -22,13 +22,10 @@
           <div class="stage-line line-b"></div>
           <div class="benefit-card benefit-main">
             <span class="benefit-chip">拼图满绩</span>
-            <strong>免费工大试卷库</strong>
+            <strong>免费学习资料分享库</strong>
             <p>登录后直达试卷入口，并解锁意想不到的学习资料。</p>
           </div>
-          <div class="benefit-card benefit-sub benefit-left">
-            <span class="mini-dot"></span>
-            <p>工大试卷免费获取</p>
-          </div>
+
           <div class="benefit-card benefit-sub benefit-right">
             <span class="mini-dot"></span>
             <p>学习资料持续更新</p>
@@ -37,7 +34,6 @@
 
         <div class="feature-list">
           <span>拼图满绩登录</span>
-          <span>工大免费试卷</span>
           <span>精选学习资料</span>
         </div>
       </div>

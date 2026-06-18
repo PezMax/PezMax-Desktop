@@ -10,7 +10,7 @@
       </div>
       <h1 class="scene-title">{{ title }}</h1>
       <p class="scene-description">
-        注册拼图满绩后，可免费获取工大试卷，并发现高质量学习资料。
+        注册拼图满绩，发现高质量学习资料。
       </p>
 
       <div class="scene-stage">
@@ -25,7 +25,6 @@
           <div class="stage-line line-b"></div>
           <div class="benefit-card benefit-main">
             <span class="benefit-chip">拼图满绩</span>
-            <strong>开启免费工大试卷</strong>
 
           </div>
           <div class="benefit-card benefit-sub benefit-left">
@@ -40,7 +39,6 @@
 
         <div class="feature-list">
           <span>拼图满绩注册</span>
-          <span>工大免费试卷</span>
           <span>精选学习资料</span>
         </div>
       </div>
