@@ -36,6 +36,7 @@ if (process.contextIsolated) {
       checkForUpdates: () => ipcRenderer.invoke('update:check'),
       downloadUpdate: () => ipcRenderer.invoke('update:download'),
       quitAndInstallUpdate: () => ipcRenderer.invoke('update:quit-and-install'),
+      saveShortcutStateBeforeUpdate: () => ipcRenderer.invoke('update:save-shortcut-state'),
       getPresetUpdateSources: () => ipcRenderer.invoke('update:get-preset-sources'),
       configureUpdateSource: (updateSource) => ipcRenderer.invoke('update:configure-source', updateSource),
       onUpdateStatus: (callback) => {

@@ -5,7 +5,7 @@ import { Blob } from 'buffer'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { apiRegistry,findApi } from './main-utils/apiRegistry'
-import { checkForUpdates, configureFromSettings, downloadUpdate, getPresetUpdateSources, getUpdateInfo, initUpdater, quitAndInstallUpdate } from './main-utils/updater'
+import { checkForUpdates, configureFromSettings, downloadUpdate, getPresetUpdateSources, getUpdateInfo, initUpdater, quitAndInstallUpdate, saveShortcutStateBeforeUpdate, handleShortcutAfterUpdate } from './main-utils/updater'
 import { insertDownloadRecord, listDownloadRecords, deleteDownloadRecord, flushDb, closeDatabase } from './main-utils/database'
 
 // ================= 持久化设置与开机自启逻辑 =================
@@ -366,6 +366,7 @@ app.whenReady().then(() => {
   ipcMain.handle('update:check', () => checkForUpdates())
   ipcMain.handle('update:download', () => downloadUpdate())
   ipcMain.handle('update:quit-and-install', () => quitAndInstallUpdate())
+  ipcMain.handle('update:save-shortcut-state', () => saveShortcutStateBeforeUpdate())
 
   // 更新源配置
   ipcMain.handle('update:get-preset-sources', () => getPresetUpdateSources())
@@ -841,6 +842,7 @@ app.whenReady().then(() => {
   createWindow()
   checkVersionAndClearCache() // 检测版本更新并清理缓存
   initUpdater(mainWindow)
+  handleShortcutAfterUpdate() // 更新后重建桌面快捷方式
 
   // 初始化时注册全局快捷键
   registerGlobalShortcuts(currentSettings, mainWindow)
