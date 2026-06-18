@@ -152,9 +152,11 @@ function normalizeWindowValue(value, fallback) {
 }
 
 function getWindowBounds(isClientLaunch) {
-  const mode = isClientLaunch ? 'client' : 'admin'
+  // 生产环境 process.env.VITE_AUTH_ENTRY_MODE 可能为 undefined，此时默认按 client 处理
+  const effectiveMode = isClientLaunch !== false // 只有明确为 false (admin) 时走 admin 路径
+  const mode = effectiveMode ? 'client' : 'admin'
   const defaults = DEFAULT_WINDOW_BOUNDS[mode]
-  const envPrefix = isClientLaunch ? 'VITE_CLIENT_WINDOW' : 'VITE_ADMIN_WINDOW'
+  const envPrefix = effectiveMode ? 'VITE_CLIENT_WINDOW' : 'VITE_ADMIN_WINDOW'
   const width = normalizeWindowValue(process.env[`${envPrefix}_WIDTH`], defaults.width)
   const height = normalizeWindowValue(process.env[`${envPrefix}_HEIGHT`], defaults.height)
   const minWidth = Math.min(
@@ -200,7 +202,8 @@ function applyWindowMode(mode) {
   mainWindow.setResizable(true)
   mainWindow.setMaximizable(true)
   mainWindow.setFullScreenable(true)
-  mainWindow.setMaximumSize(10000, 10000)
+  // 0 表示不限制最大尺寸（Electron 文档），用 10000 在打包后可能干扰最小尺寸
+  mainWindow.setMaximumSize(0, 0)
   mainWindow.setMinimumSize(windowBounds.minWidth, windowBounds.minHeight)
   const currentSize = mainWindow.getSize()
   const nextWidth = Math.max(currentSize[0], windowBounds.minWidth)
@@ -240,6 +243,9 @@ function createWindow() {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    // 确保最小尺寸在窗口显示后生效（防止打包后失效）
+    const bounds = getWindowBounds(process.env.VITE_AUTH_ENTRY_MODE === 'client')
+    mainWindow.setMinimumSize(bounds.minWidth, bounds.minHeight)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
