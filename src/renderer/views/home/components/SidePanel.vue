@@ -68,7 +68,7 @@
       <div class="panel-search" v-if="activeView === 'explorer'">
         <el-input
           v-model="searchQuery"
-          placeholder="搜索试题、资料..."
+          placeholder="搜索学科"
           prefix-icon="Search"
           clearable
           class="panel-search-input"

@@ -19,6 +19,7 @@ if (process.contextIsolated) {
       selectFolder: () => ipcRenderer.invoke('select-folder'), // 新增文件夹选择接口
       readFolderPath: (path) => ipcRenderer.invoke('read-folder-path', path), // 新增拖拽文件夹读取接口
       windowControl: (action) => ipcRenderer.send('window-control', action), // 暴露窗口控制接口
+      closeWindow: () => ipcRenderer.send('window-control', 'close'), // 强制关闭窗口（供通知弹窗等使用）
       setWindowMode: (mode) => ipcRenderer.send('set-window-mode', mode), // LYZ四次修改：切换认证页/主页面窗口模式，原因：仅认证页需要固定不可拖拽尺寸
       onWindowMaximized: (callback) => ipcRenderer.on('window-maximized', (event, isMaximized) => callback(isMaximized)), // 监听窗口最大化状态
       getSettings: () => ipcRenderer.invoke('get-settings'), // 读取本地设置
@@ -35,6 +36,7 @@ if (process.contextIsolated) {
       checkForUpdates: () => ipcRenderer.invoke('update:check'),
       downloadUpdate: () => ipcRenderer.invoke('update:download'),
       quitAndInstallUpdate: () => ipcRenderer.invoke('update:quit-and-install'),
+      saveShortcutStateBeforeUpdate: () => ipcRenderer.invoke('update:save-shortcut-state'),
       getPresetUpdateSources: () => ipcRenderer.invoke('update:get-preset-sources'),
       configureUpdateSource: (updateSource) => ipcRenderer.invoke('update:configure-source', updateSource),
       onUpdateStatus: (callback) => {
@@ -48,7 +50,9 @@ if (process.contextIsolated) {
         list: (userId) => ipcRenderer.invoke('download:list', userId),
         add: (record) => ipcRenderer.invoke('download:add', record),
         delete: (userId, fileId) => ipcRenderer.invoke('download:delete', { userId, fileId }),
-        flush: () => ipcRenderer.invoke('download:flush')
+        flush: () => ipcRenderer.invoke('download:flush'),
+        checkFiles: (records, downloadDir) => ipcRenderer.invoke('download:check-files', { records, downloadDir }),
+        deleteLocalFile: (localPath, fileName, downloadDir) => ipcRenderer.invoke('download:delete-local-file', { localPath, fileName, downloadDir })
       }
     })
   } catch (error) {

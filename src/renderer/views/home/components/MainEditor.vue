@@ -2022,16 +2022,13 @@ function resetImageTransform() {
     margin: 0;
     font-size: 15px;
     line-height: 1.6;
-    color: var(--ide-text);
+    color: #000000;
   }
-  
+
   .highlight-text {
     font-size: 20px;
     font-weight: 600;
-    color: var(--ide-text-active);
-    background: linear-gradient(120deg, var(--ide-text-active), var(--ide-text-light));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #000000;
   }
   
   .remark-text {
@@ -2083,7 +2080,7 @@ function resetImageTransform() {
   .uploader-name {
     font-size: 15px;
     font-weight: 650;
-    color: var(--ide-text-active);
+    color: #000000;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

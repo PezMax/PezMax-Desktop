@@ -282,9 +282,15 @@ const handleBatchDownload = async (paperFiles) => {
     return
   }
 
-  // 选择目标文件夹
-  const folderPath = await window.electronAPI.selectDownloadPath()
-  if (!folderPath) return // 用户取消
+  // 选择目标文件夹（静默下载开启且有默认路径时跳过弹窗）
+  const settings = await window.electronAPI.getSettings()
+  let folderPath
+  if (settings?.silentDownload && settings?.downloadPath) {
+    folderPath = settings.downloadPath
+  } else {
+    folderPath = await window.electronAPI.selectDownloadPath()
+    if (!folderPath) return // 用户取消
+  }
 
   let successCount = 0
   let failCount = 0
@@ -337,17 +343,19 @@ const handleBatchDownload = async (paperFiles) => {
         const fId = getFileId(file)
         if (fId && window.electronAPI?.downloadRecords) {
           const src = file?.originalData || file
+          // 优先从嵌套的 PtmjFile 实体中取文件元信息
+          const info = src?.fileInfo || src?.ptmjFile || {}
           try {
             const record = {
               fileId: Number(fId) || 0,
               fileName,
-              fileUrl: src?.fileUrl || src?.url || '',
-              fileSize: Number(src?.fileSize) || 0,
-              fileFormat: src?.fileFormat || '',
-              fileSchool: src?.fileSchool || '',
-              fileSubject: src?.fileSubject || '',
-              fileYear: src?.fileYear != null ? Number(src?.fileYear) : null,
-              fileType: src?.fileType != null ? Number(src?.fileType) : null,
+              fileUrl: src?.url || info?.fileUrl || '',
+              fileSize: Number(info?.fileSize) || 0,
+              fileFormat: info?.fileFormat || '',
+              fileSchool: info?.fileSchool || '',
+              fileSubject: info?.fileSubject || '',
+              fileYear: info?.fileYear != null ? Number(info?.fileYear) : null,
+              fileType: info?.fileType != null ? Number(info?.fileType) : null,
               localPath: result.filePath || '',
               userId: userStore.id ? Number(userStore.id) : null
             }
@@ -392,11 +400,12 @@ const getFileId = (file) => {
   if (isBookmarkItem(file)) return ''
   const source = file?.originalData || file
   // 按照优先级从各种可能的嵌套结构中寻找 ID
-  const id = source?.fileId ?? 
-             source?.id ?? 
-             source?.fileInfo?.fileId ?? 
-             source?.fileInfo?.id ?? 
-             source?.ptmjFile?.fileId ?? 
+  // 优先取嵌套结构中的真实 fileId，避免拿到 tree node 的合成 id（如 "file-11"）
+  const id = source?.fileId ??
+             source?.fileInfo?.fileId ??
+             source?.ptmjFile?.fileId ??
+             source?.id ??
+             source?.fileInfo?.id ??
              source?.ptmjFile?.id
              
   return id === undefined || id === null || id === '' ? '' : String(id)
@@ -612,27 +621,22 @@ const fetchTreeData = async () => {
 // lxq 本地搜索：直接在已有文件树中按文件夹名筛选，排除单个文件，不发起后端请求
 let searchTimer = null
 
-// lxq 在树中递归搜索匹配的文件夹节点，只返回文件夹，排除文件节点
+//只按学科（根级文件夹）搜索，不匹配学校/类型/年份等子级文件夹
+
 const filterFolders = (nodes, kw) => {
   if (!Array.isArray(nodes)) return []
 
   const result = []
-  const walk = (list) => {
-    list.forEach(node => {
-      const isFolder = node.type === 'folder' || (node.children && node.children.length > 0)
-      if (!isFolder) return // 跳过文件节点
+  nodes.forEach(node => {
+    const isFolder = node.type === 'folder' || (node.children && node.children.length > 0)
+    if (!isFolder) return
 
-      const label = (node.label || '').toLowerCase()
-      if (label.includes(kw)) {
-        result.push(node)
-      }
-      // 递归搜索子文件夹
-      if (node.children && node.children.length > 0) {
-        walk(node.children)
-      }
-    })
-  }
-  walk(nodes)
+    const label = (node.label || '').toLowerCase()
+    if (label.includes(kw)) {
+      result.push(node)
+    }
+  })
+
   return result
 }
 

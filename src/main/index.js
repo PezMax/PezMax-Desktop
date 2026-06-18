@@ -5,7 +5,7 @@ import { Blob } from 'buffer'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { apiRegistry,findApi } from './main-utils/apiRegistry'
-import { checkForUpdates, configureFromSettings, downloadUpdate, getPresetUpdateSources, getUpdateInfo, initUpdater, quitAndInstallUpdate } from './main-utils/updater'
+import { checkForUpdates, configureFromSettings, downloadUpdate, getPresetUpdateSources, getUpdateInfo, initUpdater, quitAndInstallUpdate, saveShortcutStateBeforeUpdate, handleShortcutAfterUpdate } from './main-utils/updater'
 import { insertDownloadRecord, listDownloadRecords, deleteDownloadRecord, flushDb, closeDatabase } from './main-utils/database'
 
 // ================= 持久化设置与开机自启逻辑 =================
@@ -152,9 +152,11 @@ function normalizeWindowValue(value, fallback) {
 }
 
 function getWindowBounds(isClientLaunch) {
-  const mode = isClientLaunch ? 'client' : 'admin'
+  // 生产环境 process.env.VITE_AUTH_ENTRY_MODE 可能为 undefined，此时默认按 client 处理
+  const effectiveMode = isClientLaunch !== false // 只有明确为 false (admin) 时走 admin 路径
+  const mode = effectiveMode ? 'client' : 'admin'
   const defaults = DEFAULT_WINDOW_BOUNDS[mode]
-  const envPrefix = isClientLaunch ? 'VITE_CLIENT_WINDOW' : 'VITE_ADMIN_WINDOW'
+  const envPrefix = effectiveMode ? 'VITE_CLIENT_WINDOW' : 'VITE_ADMIN_WINDOW'
   const width = normalizeWindowValue(process.env[`${envPrefix}_WIDTH`], defaults.width)
   const height = normalizeWindowValue(process.env[`${envPrefix}_HEIGHT`], defaults.height)
   const minWidth = Math.min(
@@ -200,7 +202,8 @@ function applyWindowMode(mode) {
   mainWindow.setResizable(true)
   mainWindow.setMaximizable(true)
   mainWindow.setFullScreenable(true)
-  mainWindow.setMaximumSize(10000, 10000)
+  // 0 表示不限制最大尺寸（Electron 文档），用 10000 在打包后可能干扰最小尺寸
+  mainWindow.setMaximumSize(0, 0)
   mainWindow.setMinimumSize(windowBounds.minWidth, windowBounds.minHeight)
   const currentSize = mainWindow.getSize()
   const nextWidth = Math.max(currentSize[0], windowBounds.minWidth)
@@ -240,6 +243,9 @@ function createWindow() {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    // 确保最小尺寸在窗口显示后生效（防止打包后失效）
+    const bounds = getWindowBounds(process.env.VITE_AUTH_ENTRY_MODE === 'client')
+    mainWindow.setMinimumSize(bounds.minWidth, bounds.minHeight)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -366,6 +372,7 @@ app.whenReady().then(() => {
   ipcMain.handle('update:check', () => checkForUpdates())
   ipcMain.handle('update:download', () => downloadUpdate())
   ipcMain.handle('update:quit-and-install', () => quitAndInstallUpdate())
+  ipcMain.handle('update:save-shortcut-state', () => saveShortcutStateBeforeUpdate())
 
   // 更新源配置
   ipcMain.handle('update:get-preset-sources', () => getPresetUpdateSources())
@@ -468,6 +475,41 @@ app.whenReady().then(() => {
       console.error('[download:flush] 刷盘失败:', e)
       return { success: false, message: e.message }
     }
+  })
+
+  // 批量检查本地文件是否存在
+  ipcMain.handle('download:check-files', async (_event, { records, downloadDir }) => {
+    const result = {}
+    const dir = downloadDir ? downloadDir.replace(/[/\\]$/, '') : ''
+    for (const rec of records) {
+      const paths = []
+      if (rec.localPath) paths.push(rec.localPath)
+      if (dir && rec.fileName) paths.push(`${dir}/${rec.fileName}`)
+      const exists = paths.some(p => {
+        try { return fs.existsSync(p) } catch { return false }
+      })
+      result[rec.fileId] = exists
+    }
+    return { success: true, result }
+  })
+
+  // 删除本地文件（同时用于删除SQLite记录时清理磁盘）
+  ipcMain.handle('download:delete-local-file', async (_event, { localPath, fileName, downloadDir }) => {
+    const paths = []
+    if (localPath) paths.push(localPath)
+    if (downloadDir && fileName) paths.push(`${downloadDir.replace(/[/\\]$/, '')}/${fileName}`)
+    for (const p of paths) {
+      try {
+        if (fs.existsSync(p)) {
+          fs.unlinkSync(p)
+          console.log('[download:delete-local-file] 已删除本地文件:', p)
+          return { success: true, deleted: p }
+        }
+      } catch (e) {
+        console.error('[download:delete-local-file] 删除失败:', p, e)
+      }
+    }
+    return { success: true, deleted: null }
   })
 
   // 处理选择下载文件夹
@@ -841,6 +883,7 @@ app.whenReady().then(() => {
   createWindow()
   checkVersionAndClearCache() // 检测版本更新并清理缓存
   initUpdater(mainWindow)
+  handleShortcutAfterUpdate() // 更新后重建桌面快捷方式
 
   // 初始化时注册全局快捷键
   registerGlobalShortcuts(currentSettings, mainWindow)

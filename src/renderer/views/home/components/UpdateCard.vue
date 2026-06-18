@@ -84,7 +84,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Download, MagicStick } from '@element-plus/icons-vue'
 
 const defaultState = () => ({
@@ -188,9 +188,33 @@ const handleDownload = async () => {
 
 const handleInstall = async () => {
   if (!window.electronAPI?.quitAndInstallUpdate) return
-  const result = await window.electronAPI.quitAndInstallUpdate()
-  if (!result?.success) {
-    ElMessage.info('更新包尚未准备完成。')
+
+  try {
+    await ElMessageBox.confirm(
+      '应用将自动重启并更新，是否继续？',
+      '安装更新',
+      {
+        confirmButtonText: '立即重启',
+        cancelButtonText: '稍后再说',
+        type: 'warning',
+        center: true
+      }
+    )
+
+    // 用户确认后，先保存桌面快捷方式状态再触发安装
+    if (window.electronAPI?.saveShortcutStateBeforeUpdate) {
+      await window.electronAPI.saveShortcutStateBeforeUpdate()
+    }
+
+    const result = await window.electronAPI.quitAndInstallUpdate()
+    if (!result?.success) {
+      ElMessage.info('更新包尚未准备完成。')
+    }
+  } catch (error) {
+    // 用户取消弹窗 (error === 'cancel') 或 IPC 断开 (正常，主进程已退出)
+    if (error !== 'cancel' && error?.message !== 'cancel') {
+      console.error('安装更新失败:', error)
+    }
   }
 }
 

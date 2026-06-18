@@ -1,7 +1,8 @@
 import fs from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { execSync } from 'child_process'
 
 const PLACEHOLDER_MARKERS = ['example.com', 'your-owner', 'your-repo']
 
@@ -374,6 +375,157 @@ export const quitAndInstallUpdate = () => {
     return { success: false, reason: 'not-ready' }
   }
 
-  autoUpdater.quitAndInstall()
-  return { success: true }
+  updateState.status = 'installing'
+  updateState.message = '正在准备安装更新...'
+  emitUpdateStatus()
+
+  // 通知渲染进程即将重启（渲染端已弹出确认框，此处记录状态即可）
+  try {
+    autoUpdater.quitAndInstall()
+    return { success: true }
+  } catch (error) {
+    console.error('quitAndInstall 调用失败:', error)
+    updateState.status = 'error'
+    updateState.message = error?.message || '安装更新失败，请重试'
+    emitUpdateStatus()
+    return { success: false, reason: 'error', message: error?.message }
+  }
+}
+
+// ================= 桌面快捷方式管理 =================
+
+const SHORTCUT_STATE_FILE = 'shortcut-state.json'
+
+/**
+ * 检查桌面快捷方式是否存在
+ * Windows: 检查用户桌面 + 公共桌面
+ */
+const checkDesktopShortcutExists = () => {
+  try {
+    const productName = 'PezMax'
+    const userDesktop = join(app.getPath('desktop'), `${productName}.lnk`)
+    if (fs.existsSync(userDesktop)) return true
+
+    // 也检查公共桌面（All Users）
+    const publicDesktop = join(
+      process.env.PUBLIC || 'C:\\Users\\Public',
+      'Desktop',
+      `${productName}.lnk`
+    )
+    if (fs.existsSync(publicDesktop)) return true
+
+    return false
+  } catch (e) {
+    console.error('检查桌面快捷方式失败:', e)
+    return false
+  }
+}
+
+/**
+ * 更新前保存快捷方式状态
+ */
+const saveShortcutState = () => {
+  try {
+    const existed = checkDesktopShortcutExists()
+    const statePath = join(app.getPath('userData'), SHORTCUT_STATE_FILE)
+    fs.writeFileSync(statePath, JSON.stringify({ shortcutExisted: existed, savedAt: Date.now() }), 'utf8')
+    console.log('快捷方式状态已保存:', { shortcutExisted: existed })
+    return { success: true, shortcutExisted: existed }
+  } catch (e) {
+    console.error('保存快捷方式状态失败:', e)
+    return { success: false, error: e.message }
+  }
+}
+
+/**
+ * 删除旧桌面快捷方式
+ */
+const removeOldShortcuts = () => {
+  if (process.platform !== 'win32') return
+
+  const productName = 'PezMax'
+  const candidates = [
+    join(app.getPath('desktop'), `${productName}.lnk`),
+    join(process.env.PUBLIC || 'C:\\Users\\Public', 'Desktop', `${productName}.lnk`)
+  ]
+
+  for (const shortcutPath of candidates) {
+    try {
+      if (fs.existsSync(shortcutPath)) {
+        fs.unlinkSync(shortcutPath)
+        console.log('已删除旧快捷方式:', shortcutPath)
+      }
+    } catch (e) {
+      console.error('删除旧快捷方式失败:', shortcutPath, e)
+    }
+  }
+}
+
+/**
+ * 创建新的桌面快捷方式（指向当前可执行文件）
+ */
+const createDesktopShortcut = () => {
+  if (process.platform !== 'win32') return
+
+  const productName = 'PezMax'
+  const desktopPath = app.getPath('desktop')
+  const shortcutPath = join(desktopPath, `${productName}.lnk`)
+  const targetPath = process.execPath
+  const workingDir = dirname(targetPath)
+
+  // 先清理可能残留的旧快捷方式
+  removeOldShortcuts()
+
+  try {
+    // 使用 PowerShell 创建快捷方式（比 VBS 更可靠）
+    const psScript = `
+$WshShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WshShell.CreateShortcut('${shortcutPath.replace(/'/g, "''")}')
+$Shortcut.TargetPath = '${targetPath.replace(/'/g, "''")}'
+$Shortcut.WorkingDirectory = '${workingDir.replace(/'/g, "''")}'
+$Shortcut.Description = '${productName}'
+$Shortcut.IconLocation = '${targetPath.replace(/'/g, "''")},0'
+$Shortcut.Save()
+Write-Output 'OK'
+`
+    execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${psScript.replace(/"/g, '\\"')}"`, {
+      timeout: 15000,
+      windowsHide: true
+    })
+    console.log('桌面快捷方式已创建:', shortcutPath)
+  } catch (e) {
+    console.error('创建桌面快捷方式失败:', e)
+  }
+}
+
+/**
+ * 启动时处理更新后的快捷方式重建
+ * 读取之前保存的状态，如果更新前存在快捷方式则重建
+ */
+export const handleShortcutAfterUpdate = () => {
+  // 仅在打包环境执行
+  if (!app.isPackaged) return
+
+  const statePath = join(app.getPath('userData'), SHORTCUT_STATE_FILE)
+  if (!fs.existsSync(statePath)) return
+
+  try {
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+    if (state.shortcutExisted) {
+      console.log('更新前桌面有快捷方式，重新创建...')
+      createDesktopShortcut()
+    } else {
+      console.log('更新前桌面无快捷方式，跳过创建')
+    }
+    // 清理状态文件
+    fs.unlinkSync(statePath)
+  } catch (e) {
+    console.error('处理更新后快捷方式失败:', e)
+    // 状态文件损坏时也清理，避免反复尝试
+    try { fs.unlinkSync(statePath) } catch (_) {}
+  }
+}
+
+export const saveShortcutStateBeforeUpdate = () => {
+  return saveShortcutState()
 }

@@ -10,7 +10,7 @@
       </div>
       <h1 class="scene-title">{{ title }}</h1>
       <p class="scene-description">
-        找回拼图满绩账号，继续免费使用工大试卷与精选学习资料。
+        找回拼图满绩账号
       </p>
 
       <div class="scene-stage">
@@ -40,7 +40,6 @@
 
         <div class="feature-list">
           <span>拼图满绩找回</span>
-          <span>工大免费试卷</span>
           <span>精选学习资料</span>
         </div>
       </div>
