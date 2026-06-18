@@ -282,9 +282,15 @@ const handleBatchDownload = async (paperFiles) => {
     return
   }
 
-  // 选择目标文件夹
-  const folderPath = await window.electronAPI.selectDownloadPath()
-  if (!folderPath) return // 用户取消
+  // 选择目标文件夹（静默下载开启且有默认路径时跳过弹窗）
+  const settings = await window.electronAPI.getSettings()
+  let folderPath
+  if (settings?.silentDownload && settings?.downloadPath) {
+    folderPath = settings.downloadPath
+  } else {
+    folderPath = await window.electronAPI.selectDownloadPath()
+    if (!folderPath) return // 用户取消
+  }
 
   let successCount = 0
   let failCount = 0
@@ -337,17 +343,19 @@ const handleBatchDownload = async (paperFiles) => {
         const fId = getFileId(file)
         if (fId && window.electronAPI?.downloadRecords) {
           const src = file?.originalData || file
+          // 优先从嵌套的 PtmjFile 实体中取文件元信息
+          const info = src?.fileInfo || src?.ptmjFile || {}
           try {
             const record = {
               fileId: Number(fId) || 0,
               fileName,
-              fileUrl: src?.fileUrl || src?.url || '',
-              fileSize: Number(src?.fileSize) || 0,
-              fileFormat: src?.fileFormat || '',
-              fileSchool: src?.fileSchool || '',
-              fileSubject: src?.fileSubject || '',
-              fileYear: src?.fileYear != null ? Number(src?.fileYear) : null,
-              fileType: src?.fileType != null ? Number(src?.fileType) : null,
+              fileUrl: src?.url || info?.fileUrl || '',
+              fileSize: Number(info?.fileSize) || 0,
+              fileFormat: info?.fileFormat || '',
+              fileSchool: info?.fileSchool || '',
+              fileSubject: info?.fileSubject || '',
+              fileYear: info?.fileYear != null ? Number(info?.fileYear) : null,
+              fileType: info?.fileType != null ? Number(info?.fileType) : null,
               localPath: result.filePath || '',
               userId: userStore.id ? Number(userStore.id) : null
             }
