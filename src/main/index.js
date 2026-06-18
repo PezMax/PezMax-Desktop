@@ -477,6 +477,41 @@ app.whenReady().then(() => {
     }
   })
 
+  // 批量检查本地文件是否存在
+  ipcMain.handle('download:check-files', async (_event, { records, downloadDir }) => {
+    const result = {}
+    const dir = downloadDir ? downloadDir.replace(/[/\\]$/, '') : ''
+    for (const rec of records) {
+      const paths = []
+      if (rec.localPath) paths.push(rec.localPath)
+      if (dir && rec.fileName) paths.push(`${dir}/${rec.fileName}`)
+      const exists = paths.some(p => {
+        try { return fs.existsSync(p) } catch { return false }
+      })
+      result[rec.fileId] = exists
+    }
+    return { success: true, result }
+  })
+
+  // 删除本地文件（同时用于删除SQLite记录时清理磁盘）
+  ipcMain.handle('download:delete-local-file', async (_event, { localPath, fileName, downloadDir }) => {
+    const paths = []
+    if (localPath) paths.push(localPath)
+    if (downloadDir && fileName) paths.push(`${downloadDir.replace(/[/\\]$/, '')}/${fileName}`)
+    for (const p of paths) {
+      try {
+        if (fs.existsSync(p)) {
+          fs.unlinkSync(p)
+          console.log('[download:delete-local-file] 已删除本地文件:', p)
+          return { success: true, deleted: p }
+        }
+      } catch (e) {
+        console.error('[download:delete-local-file] 删除失败:', p, e)
+      }
+    }
+    return { success: true, deleted: null }
+  })
+
   // 处理选择下载文件夹
   ipcMain.handle('select-download-path', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
