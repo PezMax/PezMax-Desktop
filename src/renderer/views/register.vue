@@ -112,6 +112,7 @@
             </template>
 
             <template v-else-if="step === 2">
+              <p class="security-hint">密保问题用于找回密码，你可以自定义密保问题和答案</p>
               <el-form-item prop="securityQuestionOne">
                 <el-input
                   v-model="registerForm.securityQuestionOne"
@@ -895,6 +896,13 @@ onUnmounted(() => {
 
 .username-hint {
   margin: 4px 0 0 4px;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.4;
+}
+
+.security-hint {
+  margin: 0 0 12px 4px;
   font-size: 12px;
   color: #999;
   line-height: 1.4;
