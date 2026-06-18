@@ -612,27 +612,22 @@ const fetchTreeData = async () => {
 // lxq 本地搜索：直接在已有文件树中按文件夹名筛选，排除单个文件，不发起后端请求
 let searchTimer = null
 
-// lxq 在树中递归搜索匹配的文件夹节点，只返回文件夹，排除文件节点
+//只按学科（根级文件夹）搜索，不匹配学校/类型/年份等子级文件夹
+
 const filterFolders = (nodes, kw) => {
   if (!Array.isArray(nodes)) return []
 
   const result = []
-  const walk = (list) => {
-    list.forEach(node => {
-      const isFolder = node.type === 'folder' || (node.children && node.children.length > 0)
-      if (!isFolder) return // 跳过文件节点
+  nodes.forEach(node => {
+    const isFolder = node.type === 'folder' || (node.children && node.children.length > 0)
+    if (!isFolder) return
 
-      const label = (node.label || '').toLowerCase()
-      if (label.includes(kw)) {
-        result.push(node)
-      }
-      // 递归搜索子文件夹
-      if (node.children && node.children.length > 0) {
-        walk(node.children)
-      }
-    })
-  }
-  walk(nodes)
+    const label = (node.label || '').toLowerCase()
+    if (label.includes(kw)) {
+      result.push(node)
+    }
+  })
+
   return result
 }
 
