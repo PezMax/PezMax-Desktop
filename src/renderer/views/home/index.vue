@@ -392,11 +392,12 @@ const getFileId = (file) => {
   if (isBookmarkItem(file)) return ''
   const source = file?.originalData || file
   // 按照优先级从各种可能的嵌套结构中寻找 ID
-  const id = source?.fileId ?? 
-             source?.id ?? 
-             source?.fileInfo?.fileId ?? 
-             source?.fileInfo?.id ?? 
-             source?.ptmjFile?.fileId ?? 
+  // 优先取嵌套结构中的真实 fileId，避免拿到 tree node 的合成 id（如 "file-11"）
+  const id = source?.fileId ??
+             source?.fileInfo?.fileId ??
+             source?.ptmjFile?.fileId ??
+             source?.id ??
+             source?.fileInfo?.id ??
              source?.ptmjFile?.id
              
   return id === undefined || id === null || id === '' ? '' : String(id)
