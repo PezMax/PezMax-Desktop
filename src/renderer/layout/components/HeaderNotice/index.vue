@@ -53,6 +53,7 @@
 
 <script setup>
 import { listNoticeTop, markNoticeRead, markNoticeReadAll, getNotice } from '@/api/system/notice'
+import { sanitizeRichText } from '@/utils/sanitizeHtml'
 
 const noticePopover = ref(null)
 const noticeList = ref([])
@@ -112,7 +113,7 @@ function previewNotice(item) {
   getNotice(item.noticeId).then(res => {
     const notice = res.data
     previewTitle.value = notice.noticeTitle
-    previewContent.value = notice.noticeContent
+    previewContent.value = sanitizeRichText(notice.noticeContent)
     previewNoticeType.value = notice.noticeType
     previewCreateBy.value = notice.createBy
     previewCreateTime.value = notice.createTime

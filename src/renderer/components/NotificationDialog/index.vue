@@ -48,6 +48,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { sanitizeRichText } from '@/utils/sanitizeHtml'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -77,7 +78,7 @@ const isInMaintenancePeriod = computed(() => {
   return new Date() >= new Date(maintenanceStartTime.value)
 })
 
-const formattedContent = computed(() => content.value?.replace(/\n/g, '<br/>') || '')
+const formattedContent = computed(() => sanitizeRichText(content.value, { preserveLineBreaks: true }))
 
 const canClose = computed(() => {
   if (notifyType.value === '1' && forceUpdate.value === '1') return false
@@ -87,7 +88,8 @@ const canClose = computed(() => {
 })
 
 const handleUpdate = async () => {
-  if (updateDownloadUrl.value) window.open(updateDownloadUrl.value, '_blank')
+  const downloadUrl = getSafeExternalUrl(updateDownloadUrl.value)
+  if (downloadUrl) window.open(downloadUrl, '_blank')
 
   // 记录已处理的强制更新通知
   if (notifyType.value === '1') {
@@ -120,6 +122,15 @@ const handleAcknowledge = async () => {
   visible.value = false
   emit('acknowledge', props.notification)
 
+}
+
+function getSafeExternalUrl(value) {
+  try {
+    const url = new URL(value)
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : ''
+  } catch {
+    return ''
+  }
 }
 </script>
 
