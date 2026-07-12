@@ -283,21 +283,21 @@ const handleSchoolBlur = async (event) => {
   if (value && value.trim()) {
     try {
       const res = await checkSchoolExists(value.trim())
-      if (res.code === 200 && res.data) {
-        // 提示用户该学校已存在
+      if (res.code === 200 && !res.data) {
+        // 仅在数据库中不存在该学校时询问是否新建
         await ElMessageBox.confirm(
-          '该学校已存在，是否使用已有学校？',
+          '该学校不存在，是否新建？',
           '提示',
           {
-            confirmButtonText: '使用已有',
-            cancelButtonText: '继续使用',
+            confirmButtonText: '确认新建',
+            cancelButtonText: '返回修改',
             type: 'warning',
             customClass: 'modern-message-box'
           }
         ).then(() => {
-          // 用户选择使用已有学校，保持当前输入
+          // 用户确认新建，保持当前输入
         }).catch(() => {
-          // 用户继续使用当前输入
+          // 用户返回修改，保持当前输入
         })
       }
     } catch (error) {
