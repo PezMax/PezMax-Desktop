@@ -95,6 +95,8 @@
       @acknowledge="handleNotificationAcknowledge"
     />
 
+    <AgentChatWidget @open-file="openRelatedFile" />
+
     <!-- fxy 下载进度条悬浮层，物理丝滑进出动画 -->
     <transition name="download-slide">
       <div v-if="isDownloading" class="download-progress-float">
@@ -119,6 +121,7 @@ import ActivityBar from './components/ActivityBar.vue'
 import SidePanel from './components/SidePanel.vue'
 import MainEditor from './components/MainEditor.vue'
 import FileInfoDrawer from './components/FileInfoDrawer.vue'
+import AgentChatWidget from './components/AgentChatWidget.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import DonateModal from './components/DonateModal.vue'
 import RankView from '@/views/rank/index.vue'
