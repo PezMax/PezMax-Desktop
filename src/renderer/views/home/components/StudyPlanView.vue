@@ -93,6 +93,23 @@
 
               <div v-if="mockExam.paperAnalysis" class="material-analysis">{{ mockExam.paperAnalysis }}</div>
 
+              <div v-if="mockExam.documentTexts?.length" class="document-section">
+                <div class="source-title">真题正文解析</div>
+                <div
+                  v-for="item in mockExam.documentTexts"
+                  :key="item.fileId || item.fileName || item.fileUrl"
+                  class="document-card"
+                  :class="{ 'is-error': item.error && !item.text }"
+                >
+                  <div class="document-head">
+                    <span>{{ item.fileName || '未命名资料' }}</span>
+                    <el-tag size="small" effect="plain">{{ item.fileFormat || '文件' }}</el-tag>
+                  </div>
+                  <p v-if="item.text">{{ previewText(item.text) }}</p>
+                  <p v-else>{{ item.error || '暂未解析到可用正文' }}</p>
+                </div>
+              </div>
+
               <div class="mock-question-list">
                 <article v-for="question in mockExam.questions" :key="question.number" class="mock-question">
                   <div class="question-head">
@@ -275,6 +292,11 @@ async function generateMockExam() {
   } finally {
     mockLoading.value = false
   }
+}
+
+function previewText(text) {
+  if (!text) return ''
+  return text.length > 260 ? `${text.slice(0, 260)}...` : text
 }
 </script>
 
@@ -486,6 +508,44 @@ async function generateMockExam() {
 
 .question-source {
   color: var(--ide-text-light);
+}
+
+.document-section {
+  border: 1px solid var(--ide-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(var(--ide-bg-rgb, 245, 247, 250), 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.document-card {
+  padding: 10px;
+  border: 1px solid var(--ide-border);
+  border-radius: 8px;
+  background: var(--ide-panel-bg);
+
+  p {
+    margin: 7px 0 0;
+    color: var(--ide-text-light);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.document-card.is-error {
+  border-color: rgba(245, 108, 108, 0.34);
+}
+
+.document-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ide-text-active);
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .summary-card {
