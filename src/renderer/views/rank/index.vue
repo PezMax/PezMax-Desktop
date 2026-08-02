@@ -64,18 +64,26 @@
       <div class="rank-panel rank-panel-detail">
         <div class="panel-header">
           <div class="panel-title">
-            <svg-icon icon-class="user" class="panel-title-icon" />
+            <svg-icon :icon-class="activeDetailTab === 'ops' ? 'chart' : 'user'" class="panel-title-icon" />
+            <span class="panel-title-dynamic">{{ activeDetailTab === 'ops' ? '运营洞察' : '用户详情' }}</span>
             <span>用户详情</span>
+          </div>
+          <div class="panel-actions">
+            <el-segmented v-model="activeDetailTab" :options="detailTabOptions" size="small" />
+            <el-button link type="primary" :icon="MagicStick" size="small" :loading="opsLoading" @click="fetchOpsInsights">
+              AI 刷新
+            </el-button>
           </div>
         </div>
 
         <div class="panel-body">
           <Transition name="fade-slide" mode="out-in">
-            <div v-if="detailLoading" key="loading" class="detail-loading">
-              <el-skeleton animated :rows="8" />
-            </div>
+            <div v-if="activeDetailTab === 'user'" key="user-tab" class="detail-tab-pane">
+              <div v-if="detailLoading" class="detail-loading">
+                <el-skeleton animated :rows="8" />
+              </div>
 
-            <div v-else-if="userDetail" key="detail" class="detail-content">
+              <div v-else-if="userDetail" class="detail-content">
               <div :class="['profile-card', `profile-top-${activeRankIndex + 1}`]">
                 <el-avatar :size="96" :src="userDetail.avatar || fallbackAvatar" class="profile-avatar" />
                 <div class="profile-name">{{ userDetail.userName || (userDetail.userId ? `用户 ${userDetail.userId}` : '未知用户') }}</div>
@@ -95,9 +103,85 @@
               </div>
             </div>
 
-            <div v-else key="empty" class="empty-state detail-empty">
+              <div v-else class="empty-state detail-empty">
               <svg-icon icon-class="user" class="empty-icon" />
               <p>点击左侧排行榜用户查看详情</p>
+              </div>
+            </div>
+
+            <div v-else key="ops-tab" class="ops-insight-pane">
+              <el-skeleton v-if="opsLoading" animated :rows="10" />
+
+              <div v-else-if="!opsInsights" class="empty-state ops-empty">
+                <svg-icon icon-class="chart" class="empty-icon" />
+                <p>点击 AI 刷新生成平台运营洞察</p>
+                <el-button type="primary" :icon="MagicStick" size="small" @click="fetchOpsInsights">生成洞察</el-button>
+              </div>
+
+              <div v-else class="ops-content">
+                <div class="ops-summary">{{ opsInsights.summary || '暂无摘要' }}</div>
+
+                <div class="ops-metrics">
+                  <div class="ops-metric">
+                    <span class="metric-value">{{ opsOverview.fileCount }}</span>
+                    <span class="metric-label">资料</span>
+                  </div>
+                  <div class="ops-metric">
+                    <span class="metric-value">{{ opsOverview.downloadCount }}</span>
+                    <span class="metric-label">下载</span>
+                  </div>
+                  <div class="ops-metric">
+                    <span class="metric-value">{{ opsOverview.reportCount }}</span>
+                    <span class="metric-label">举报</span>
+                  </div>
+                  <div class="ops-metric is-risk">
+                    <span class="metric-value">{{ opsOverview.highRiskCount }}</span>
+                    <span class="metric-label">高风险</span>
+                  </div>
+                </div>
+
+                <div class="ops-section">
+                  <div class="ops-section-title">热门资料</div>
+                  <div v-if="topHotFiles.length === 0" class="ops-muted">暂无热门资料信号</div>
+                  <div v-for="item in topHotFiles" :key="`hot-${item.file?.fileId}`" class="ops-row">
+                    <div class="ops-row-main">
+                      <div class="ops-row-title">{{ item.file?.fileName || '未命名资料' }}</div>
+                      <div class="ops-row-meta">{{ item.file?.fileSchool || '未知学校' }} · {{ item.file?.fileSubject || '未知科目' }}</div>
+                    </div>
+                    <el-tag size="small" type="success">热度 {{ item.hotScore }}</el-tag>
+                  </div>
+                </div>
+
+                <div class="ops-section">
+                  <div class="ops-section-title">质量风险</div>
+                  <div v-if="topQualityIssues.length === 0" class="ops-muted">暂无明显低质量内容</div>
+                  <div v-for="item in topQualityIssues" :key="`quality-${item.file?.fileId}`" class="ops-row">
+                    <div class="ops-row-main">
+                      <div class="ops-row-title">{{ item.file?.fileName || '未命名资料' }}</div>
+                      <div class="ops-row-meta">{{ firstReason(item.reasons) }}</div>
+                    </div>
+                    <el-tag size="small" :type="riskTagType(item.riskLevel)">{{ riskLabel(item.riskLevel) }}</el-tag>
+                  </div>
+                </div>
+
+                <div class="ops-section">
+                  <div class="ops-section-title">举报压力</div>
+                  <div v-if="topReportPressure.length === 0" class="ops-muted">暂无集中举报</div>
+                  <div v-for="item in topReportPressure" :key="`report-${item.fileId}`" class="ops-row">
+                    <div class="ops-row-main">
+                      <div class="ops-row-title">{{ item.file?.fileName || `资料 ${item.fileId}` }}</div>
+                      <div class="ops-row-meta">{{ firstReason(item.reasons) }}</div>
+                    </div>
+                    <el-tag size="small" :type="riskTagType(item.riskLevel)">{{ item.reportCount }} 条</el-tag>
+                  </div>
+                </div>
+
+                <div class="ops-section">
+                  <div class="ops-section-title">运营建议</div>
+                  <div v-if="opsSuggestions.length === 0" class="ops-muted">暂无建议</div>
+                  <div v-for="item in opsSuggestions" :key="item" class="ops-suggestion">{{ item }}</div>
+                </div>
+              </div>
             </div>
           </Transition>
         </div>
@@ -108,8 +192,10 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { MagicStick, Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { getUploadRank, getUser } from '@/api/datum/user'
+import { getOpsInsightsByAgent } from '@/api/agent'
 import { isEmpty, isHttp } from '@/utils/validate'
 import { normalizeAvatar } from '@/utils/avatar'
 
@@ -121,6 +207,13 @@ const activeUserId = ref(null)
 const activeRankIndex = ref(-1) // 新增：记录当前选中的排名索引
 const detailLoading = ref(false)
 const userDetail = ref(null)
+const activeDetailTab = ref('user')
+const detailTabOptions = [
+  { label: '用户详情', value: 'user' },
+  { label: '运营洞察', value: 'ops' }
+]
+const opsLoading = ref(false)
+const opsInsights = ref(null)
 
 const listWidth = ref(260)
 const isResizing = ref(false)
@@ -233,6 +326,59 @@ const userRemarkLabel = computed(() => {
   if (typeof remark === 'string' && remark.trim().length > 0) return remark.trim()
   return '无备注'
 })
+
+const opsOverview = computed(() => opsInsights.value?.overview || {
+  fileCount: 0,
+  downloadCount: 0,
+  reportCount: 0,
+  highRiskCount: 0
+})
+
+const topHotFiles = computed(() => Array.isArray(opsInsights.value?.hotFiles) ? opsInsights.value.hotFiles.slice(0, 5) : [])
+const topQualityIssues = computed(() => Array.isArray(opsInsights.value?.lowQualityFiles) ? opsInsights.value.lowQualityFiles.slice(0, 5) : [])
+const topReportPressure = computed(() => Array.isArray(opsInsights.value?.reportPressure) ? opsInsights.value.reportPressure.slice(0, 5) : [])
+const opsSuggestions = computed(() => Array.isArray(opsInsights.value?.suggestions) ? opsInsights.value.suggestions.slice(0, 5) : [])
+
+function firstReason(reasons) {
+  return Array.isArray(reasons) && reasons.length > 0 ? reasons[0] : '暂无原因'
+}
+
+function riskLabel(level) {
+  const value = String(level || '').toLowerCase()
+  if (value === 'high') return '高风险'
+  if (value === 'medium') return '中风险'
+  if (value === 'low') return '低风险'
+  return '正常'
+}
+
+function riskTagType(level) {
+  const value = String(level || '').toLowerCase()
+  if (value === 'high') return 'danger'
+  if (value === 'medium') return 'warning'
+  if (value === 'low') return 'info'
+  return 'success'
+}
+
+async function fetchOpsInsights() {
+  if (opsLoading.value) return
+  activeDetailTab.value = 'ops'
+  opsLoading.value = true
+  try {
+    const res = await getOpsInsightsByAgent({
+      pageNum: 1,
+      pageSize: 200,
+      includeNotifications: true
+    })
+    opsInsights.value = res?.data || res || null
+    if (!opsInsights.value) {
+      ElMessage.warning('智能体没有返回运营洞察数据')
+    }
+  } catch (err) {
+    console.warn('获取运营洞察失败:', err)
+  } finally {
+    opsLoading.value = false
+  }
+}
 
 async function fetchRank() {
   if (rankLoading.value) return
@@ -432,6 +578,17 @@ onUnmounted(() => {
 .panel-title-icon {
   font-size: 16px;
   color: var(--ide-accent);
+}
+
+.panel-title-dynamic + span {
+  display: none;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .panel-body {
@@ -709,6 +866,11 @@ onUnmounted(() => {
   padding: 10px;
 }
 
+.detail-tab-pane,
+.ops-insight-pane {
+  min-height: 100%;
+}
+
 .detail-content {
   display: flex;
   justify-content: center;
@@ -885,6 +1047,121 @@ onUnmounted(() => {
   width: 1px;
   height: 40px;
   background-color: var(--ide-border);
+}
+
+.ops-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ops-summary {
+  padding: 12px 14px;
+  border: 1px solid var(--ide-border);
+  border-radius: 10px;
+  background-color: var(--ide-panel-bg);
+  color: var(--ide-text-active);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.ops-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ops-metric {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ide-border);
+  border-radius: 10px;
+  background-color: var(--ide-panel-bg);
+}
+
+.ops-metric.is-risk .metric-value {
+  color: #f56c6c;
+}
+
+.metric-value {
+  display: block;
+  color: var(--ide-accent);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.metric-label {
+  display: block;
+  margin-top: 6px;
+  color: var(--ide-text-light);
+  font-size: 12px;
+}
+
+.ops-section {
+  border: 1px solid var(--ide-border);
+  border-radius: 10px;
+  background-color: var(--ide-panel-bg);
+  overflow: hidden;
+}
+
+.ops-section-title {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ide-border);
+  color: var(--ide-text-active);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ops-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.ops-row:first-of-type {
+  border-top: none;
+}
+
+.ops-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ops-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ide-text-active);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ops-row-meta,
+.ops-muted {
+  margin-top: 4px;
+  color: var(--ide-text-light);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ops-muted {
+  padding: 12px;
+  margin-top: 0;
+}
+
+.ops-suggestion {
+  padding: 10px 12px;
+  color: var(--ide-text-active);
+  font-size: 13px;
+  line-height: 1.6;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.ops-suggestion:first-of-type {
+  border-top: none;
 }
 
 .empty-state {

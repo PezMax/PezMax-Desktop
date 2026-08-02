@@ -55,3 +55,11 @@ export function summarizeReportsByAgent(data) {
     data
   })
 }
+
+export function getOpsInsightsByAgent(data) {
+  return request({
+    url: '/api/v1/agent/ops/insights',
+    method: 'post',
+    data
+  })
+}
