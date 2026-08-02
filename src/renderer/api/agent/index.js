@@ -24,6 +24,14 @@ export function recommendFilesByAgent(data) {
   })
 }
 
+export function generateStudyPlanByAgent(data) {
+  return request({
+    url: '/api/v1/agent/study/plan',
+    method: 'post',
+    data
+  })
+}
+
 export function suggestFileMetadata(data) {
   return request({
     url: '/api/v1/agent/files/metadata/suggest',

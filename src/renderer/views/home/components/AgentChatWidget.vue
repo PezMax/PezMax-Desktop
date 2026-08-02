@@ -17,6 +17,19 @@
             <div class="message-bubble">
               <div class="message-text">{{ message.content }}</div>
 
+              <div v-if="message.plan?.length" class="study-plan">
+                <div v-for="day in message.plan" :key="day.day" class="study-day">
+                  <div class="study-day-title">{{ day.title || `第 ${day.day} 天` }}</div>
+                  <div v-if="day.focus" class="study-focus">{{ day.focus }}</div>
+                  <div v-if="day.tasks?.length" class="study-tasks">
+                    <div v-for="task in day.tasks" :key="`${day.day}-${task.title}`" class="study-task">
+                      <span>{{ task.title }}</span>
+                      <b>{{ task.minutes }} 分钟</b>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div v-if="message.files?.length" class="file-results">
                 <button
                   v-for="item in message.files"
@@ -91,10 +104,15 @@ const messages = ref([
 
 function normalizeFiles(payload) {
   const data = payload?.data || payload
+  const planFiles = Array.isArray(data?.plan)
+    ? data.plan.flatMap(day => Array.isArray(day?.recommendedFiles) ? day.recommendedFiles : [])
+    : []
   const resultGroups = [
     data?.results,
     data?.items,
     data?.recommendations,
+    data?.recommendedFiles,
+    planFiles,
     data?.hotFiles,
     data?.lowQualityFiles,
     data?.reportPressure
@@ -106,6 +124,12 @@ function normalizeFiles(payload) {
     .filter(Boolean)
     .filter(item => item.fileId || item.id || item.fileName)
     .slice(0, 5)
+}
+
+function normalizeStudyPlan(payload) {
+  const data = payload?.data || payload
+  if (!Array.isArray(data?.plan)) return []
+  return data.plan.slice(0, 14)
 }
 
 async function scrollToBottom() {
@@ -137,6 +161,7 @@ async function sendMessage() {
       id: `assistant-${Date.now()}`,
       role: 'assistant',
       content: payload?.answer || payload?.summary || '已完成。',
+      plan: normalizeStudyPlan(payload),
       files: normalizeFiles(payload)
     })
   } catch (error) {
@@ -280,6 +305,58 @@ html.dark .agent-panel {
   background: var(--ide-accent);
   border-color: var(--ide-accent);
   color: #fff;
+}
+
+.study-plan {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.study-day {
+  padding: 10px;
+  border: 1px solid var(--ide-border);
+  border-radius: 10px;
+  background: rgba(var(--ide-bg-rgb, 255, 255, 255), 0.62);
+}
+
+.study-day-title {
+  color: var(--ide-text-active);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.study-focus {
+  margin-top: 3px;
+  color: var(--ide-text-light);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.study-tasks {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.study-task {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ide-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.study-task b {
+  color: var(--ide-text-light);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .loading-bubble {
