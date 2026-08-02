@@ -21,6 +21,15 @@
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
+      <el-button
+        v-if="activeType === 'file'"
+        class="agent-btn"
+        :loading="organizing"
+        @click="handleOrganizeFavorites"
+      >
+        <el-icon><MagicStick /></el-icon>
+        <span>AI 整理</span>
+      </el-button>
       <el-button class="reset-btn" @click="resetQuery">重置</el-button>
     </div>
 
@@ -89,6 +98,50 @@
         @current-change="syncPagedList"
       />
     </div>
+
+    <el-drawer v-model="organizeDrawerVisible" title="AI 收藏整理" size="420px" append-to-body>
+      <div class="organize-panel">
+        <div class="organize-summary" v-if="organizeResult.summary">
+          {{ organizeResult.summary }}
+        </div>
+        <div class="organize-actions">
+          <el-radio-group v-model="organizeGroupBy" size="small" @change="handleOrganizeFavorites">
+            <el-radio-button label="subject">科目</el-radio-button>
+            <el-radio-button label="school">学校</el-radio-button>
+            <el-radio-button label="year">年份</el-radio-button>
+            <el-radio-button label="type">类型</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="organize-groups" v-if="organizeResult.groups?.length">
+          <section v-for="group in organizeResult.groups" :key="group.key" class="organize-group">
+            <div class="group-head">
+              <div>
+                <h4>{{ group.label || group.key }}</h4>
+                <span>{{ group.count }} 个文件</span>
+              </div>
+              <el-tag size="small" :type="priorityTagType(group.priority)">
+                {{ priorityText(group.priority) }}
+              </el-tag>
+            </div>
+            <button
+              v-for="item in group.items"
+              :key="item.fileId"
+              class="group-file"
+              type="button"
+              @click="jumpToFile(item)"
+            >
+              <span>{{ item.fileName || `文件-${item.fileId}` }}</span>
+              <small>{{ item.fileSchool || '-' }} / {{ item.fileYear || '未知年份' }}</small>
+            </button>
+          </section>
+        </div>
+        <el-empty v-else description="暂无整理结果" />
+        <div class="organize-suggestions" v-if="organizeResult.suggestions?.length">
+          <h4>整理建议</h4>
+          <p v-for="tip in organizeResult.suggestions" :key="tip">{{ tip }}</p>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -96,7 +149,7 @@
 import { reactive, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Star, Download } from '@element-plus/icons-vue'
+import { Search, Star, Download, MagicStick } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
 import { getInfo } from '@/api/login'
 import { listFavorite, delFavorite } from '@/api/datum/favorite'
@@ -104,6 +157,7 @@ import { listFavoriteBookmark, delBookmarkFavorite } from '@/api/datum/bookmarkF
 import { getToken } from '@/utils/auth'
 import { normalizeFileUrl } from '@/utils/url'
 import { blobValidate } from '@/utils/ruoyi'
+import { organizeFavoritesByAgent } from '@/api/agent'
 
 defineOptions({ name: 'FavoritePage' })
 const props = defineProps({
@@ -120,6 +174,10 @@ const currentUserId = ref('')
 const removingIds = reactive(new Set())
 const downloadingIds = reactive(new Set())
 const activeType = ref('file')
+const organizing = ref(false)
+const organizeDrawerVisible = ref(false)
+const organizeGroupBy = ref('subject')
+const organizeResult = ref({})
 
 const query = reactive({
   pageNum: 1,
@@ -223,6 +281,45 @@ const resetQuery = () => {
   query.keyword = ''
   query.pageNum = 1
   loadList()
+}
+
+const handleOrganizeFavorites = async () => {
+  if (activeType.value !== 'file') return
+  if (!currentUserId.value) {
+    await resolveCurrentUser()
+  }
+  if (!currentUserId.value) {
+    ElMessage.warning('未能获取当前用户信息')
+    return
+  }
+
+  organizing.value = true
+  try {
+    const res = await organizeFavoritesByAgent({
+      userId: Number(currentUserId.value),
+      groupBy: organizeGroupBy.value,
+      pageNum: 1,
+      pageSize: 1000
+    })
+    organizeResult.value = res.data || res
+    organizeDrawerVisible.value = true
+  } catch (error) {
+    console.error('AI 整理收藏失败:', error)
+  } finally {
+    organizing.value = false
+  }
+}
+
+const priorityTagType = (priority) => {
+  if (priority === 'high') return 'danger'
+  if (priority === 'medium') return 'warning'
+  return 'info'
+}
+
+const priorityText = (priority) => {
+  if (priority === 'high') return '重点'
+  if (priority === 'medium') return '常用'
+  return '普通'
 }
 
 const removeItem = async (row) => {
@@ -431,6 +528,101 @@ defineExpose({ refresh: loadList, total })
   border-radius: 12px;
   padding: 0 22px;
   font-weight: 700;
+}
+.agent-btn {
+  min-height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-weight: 700;
+  color: var(--ide-accent, #409eff);
+  border-color: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.28);
+  background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.08);
+}
+.agent-btn:hover {
+  color: #fff;
+  border-color: var(--ide-accent, #409eff);
+  background: var(--ide-accent, #409eff);
+}
+.organize-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.organize-summary {
+  padding: 12px 14px;
+  border: 1px solid var(--ide-border, #ebeef5);
+  border-radius: 10px;
+  color: var(--ide-text, #606266);
+  line-height: 1.6;
+  background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.06);
+}
+.organize-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+.organize-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.organize-group {
+  border: 1px solid var(--ide-border, #ebeef5);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--ide-editor-bg, #fff);
+}
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.group-head h4 {
+  margin: 0;
+  color: var(--ide-text-active, #303133);
+}
+.group-head span {
+  color: var(--ide-text-light, #909399);
+  font-size: 12px;
+}
+.group-file {
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ide-text, #606266);
+  text-align: left;
+}
+.group-file:hover {
+  background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.08);
+  color: var(--ide-accent, #409eff);
+}
+.group-file span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+.group-file small {
+  color: var(--ide-text-light, #909399);
+}
+.organize-suggestions h4 {
+  margin: 0 0 8px;
+  color: var(--ide-text-active, #303133);
+}
+.organize-suggestions p {
+  margin: 6px 0;
+  color: var(--ide-text, #606266);
+  line-height: 1.6;
 }
 .panel-table {
   border-radius: 16px;

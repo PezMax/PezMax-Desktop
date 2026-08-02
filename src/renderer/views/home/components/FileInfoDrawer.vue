@@ -81,10 +81,36 @@
             </div>
           </div>
         </div>
+
+        <div class="info-section animate-item item-4" v-if="recommendLoading || recommendedFiles.length > 0">
+          <div class="section-title-row">
+            <h3 class="section-title">相似推荐</h3>
+            <el-icon v-if="recommendLoading" class="recommend-loading"><Loading /></el-icon>
+          </div>
+          <div class="recommend-list" v-if="recommendedFiles.length > 0">
+            <button
+              v-for="item in recommendedFiles"
+              :key="item.file.fileId || item.file.id"
+              class="recommend-item"
+              type="button"
+              @click="openRecommend(item.file)"
+            >
+              <span class="recommend-name">{{ item.file.fileName || '未知文件' }}</span>
+              <span class="recommend-meta">
+                {{ item.file.fileSchool || '-' }} / {{ item.file.fileSubject || '未分类' }} / {{ item.file.fileYear || '未知年份' }}
+              </span>
+              <span class="recommend-reason">{{ formatRecommendReason(item) }}</span>
+            </button>
+          </div>
+          <div class="recommend-empty" v-else>
+            正在生成推荐...
+          </div>
+          <p class="recommend-summary" v-if="recommendationsSummary">{{ recommendationsSummary }}</p>
+        </div>
       </div>
 
       <!-- 底部：主要操作区 -->
-      <div class="drawer-footer animate-item item-4">
+      <div class="drawer-footer animate-item item-5">
         <button class="action-btn primary-btn" @click="handleDownload">
           <el-icon><Download /></el-icon>
           <span>下载原件</span>
@@ -120,10 +146,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, Download, DocumentCopy, Warning, Select, Star, StarFilled } from '@element-plus/icons-vue'
+import { CopyDocument, Download, DocumentCopy, Warning, Select, Star, StarFilled, Loading } from '@element-plus/icons-vue'
 import { normalizeAvatar } from '@/utils/avatar'
 import { getFile } from '@/api/datum/file'
 import { getUser } from '@/api/datum/user'
+import { recommendFilesByAgent } from '@/api/agent'
 
 const props = defineProps({
   modelValue: {
@@ -144,12 +171,15 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'download-file', 'report-file'])
+const emit = defineEmits(['update:modelValue', 'download-file', 'report-file', 'toggle-favorite', 'open-related-file'])
 
 // 内部存储完整的详细信息
 const fullFileInfo = ref(null)
 // 存储单独获取的贡献者用户信息
 const contributorInfo = ref(null)
+const recommendLoading = ref(false)
+const recommendedFiles = ref([])
+const recommendationsSummary = ref('')
 
 // 优先使用完整信息，否则使用 prop 传入的基础信息
 const displayInfo = computed(() => fullFileInfo.value || props.fileInfo || {})
@@ -164,6 +194,8 @@ watch(() => props.modelValue, async (val) => {
   if (val) {
     fullFileInfo.value = null
     contributorInfo.value = null
+    recommendedFiles.value = []
+    recommendationsSummary.value = ''
     const fileId = props.fileInfo?.fileId || props.fileInfo?.id
     if (fileId) {
       try {
@@ -191,6 +223,7 @@ watch(() => props.modelValue, async (val) => {
       } catch (err) {
         console.error('获取文件详情失败:', err)
       }
+      await loadRecommendations(fileId)
     }
   }
 })
@@ -273,6 +306,41 @@ const formatFileType = (type) => {
     5: '其他学校'
   }
   return typeMap[type] || type || '未知分类'
+}
+
+const loadRecommendations = async (fileId) => {
+  recommendLoading.value = true
+  try {
+    const res = await recommendFilesByAgent({
+      fileId: Number(fileId),
+      limit: 5
+    })
+    const payload = res.data || res
+    recommendedFiles.value = (payload.recommendations || [])
+      .filter(item => item?.file)
+      .filter(item => `${item.file.fileId || item.file.id}` !== `${fileId}`)
+    recommendationsSummary.value = payload.summary || ''
+  } catch (err) {
+    console.warn('获取相似资料推荐失败:', err)
+    recommendedFiles.value = []
+    recommendationsSummary.value = ''
+  } finally {
+    recommendLoading.value = false
+  }
+}
+
+const formatRecommendReason = (item) => {
+  if (Array.isArray(item.reasons) && item.reasons.length > 0) {
+    return item.reasons[0]
+  }
+  if (item.score) {
+    return `匹配度 ${item.score}`
+  }
+  return '智能体推荐'
+}
+
+const openRecommend = (file) => {
+  emit('open-related-file', file)
 }
 
 // 丝滑复制
@@ -364,6 +432,7 @@ const handleDownload = () => {
 .item-2 { animation-delay: 0.1s; }
 .item-3 { animation-delay: 0.15s; }
 .item-4 { animation-delay: 0.2s; }
+.item-5 { animation-delay: 0.25s; }
 
 @keyframes slideUpFade {
   to {
@@ -520,6 +589,83 @@ const handleDownload = () => {
   color: var(--ide-text-light);
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recommend-loading {
+  color: var(--ide-accent);
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.recommend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recommend-item {
+  width: 100%;
+  border: 1px solid var(--ide-border);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ide-text);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.22s ease;
+
+  html.dark & {
+    background: rgba(45, 45, 45, 0.62);
+  }
+
+  &:hover {
+    border-color: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.36);
+    background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.08);
+    transform: translateY(-1px);
+  }
+}
+
+.recommend-name {
+  color: var(--ide-text-active);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.recommend-meta,
+.recommend-reason,
+.recommend-empty,
+.recommend-summary {
+  color: var(--ide-text-light);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.recommend-reason {
+  color: var(--ide-accent);
+}
+
+.recommend-summary {
+  margin: 0;
 }
 
 .info-grid {

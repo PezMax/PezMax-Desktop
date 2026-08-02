@@ -85,6 +85,12 @@
                 class="upload-error-alert"
               />
             </transition>
+            <div class="agent-suggest-row">
+              <el-button class="suggest-btn" :loading="isSuggestingMetadata" @click="handleSmartSuggest">
+                <el-icon class="mr-1"><MagicStick /></el-icon>
+                AI 补全资料信息
+              </el-button>
+            </div>
             <el-form-item label="资源名称">
               <el-input v-model="uploadForm.fileName" placeholder="给这份资料起个清晰的名字" class="modern-input" />
             </el-form-item>
@@ -220,8 +226,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import logo from '@/assets/logo/logo.png'
 import { getToken } from '@/utils/auth'
 import { getSubjects, getSchools, checkSchoolExists } from '@/api/datum/file' // 引入获取科目和学校的接口
-import { Warning, CircleClose, Close } from '@element-plus/icons-vue' // 引入警告图标
+import { Warning, CircleClose, Close, MagicStick } from '@element-plus/icons-vue' // 引入警告图标
 import useUploadStore from '@/store/modules/upload'
+import { suggestFileMetadata } from '@/api/agent'
 
 const uploadStore = useUploadStore()
 
@@ -320,6 +327,7 @@ const uploadErrorMsg = computed({
   set: (val) => { uploadStore.uploadErrorMsg = val }
 })
 const uploadForm = uploadStore.uploadForm
+const isSuggestingMetadata = ref(false)
 
 // focus 时请求热门学科
 const handleSubjectFocus = async () => {
@@ -537,6 +545,61 @@ const setFile = (fileInfo) => {
 
 const resetUpload = () => {
   uploadStore.resetUpload()
+}
+
+const applyMetadataSuggestion = (suggestion) => {
+  if (!suggestion) return false
+
+  let changed = false
+  const applyText = (key, value) => {
+    if (value === undefined || value === null || `${value}`.trim() === '') return
+    uploadForm[key] = `${value}`.trim()
+    changed = true
+  }
+
+  applyText('fileName', suggestion.fileName)
+  applyText('fileSchool', suggestion.fileSchool)
+  applyText('fileSubject', suggestion.fileSubject)
+
+  if (suggestion.fileYear) {
+    uploadForm.fileYear = `${suggestion.fileYear}`
+    changed = true
+  }
+  if (suggestion.fileType) {
+    uploadForm.fileType = Number(suggestion.fileType)
+    changed = true
+  }
+
+  return changed
+}
+
+const handleSmartSuggest = async () => {
+  if (!selectedFile.value) {
+    ElMessage.warning('请先选择需要上传的文件')
+    return
+  }
+
+  isSuggestingMetadata.value = true
+  try {
+    const fileName = uploadForm.fileName || selectedFile.value.name || ''
+    const res = await suggestFileMetadata({
+      fileName,
+      originalName: selectedFile.value.name || fileName,
+      schoolHint: uploadForm.fileSchool || '',
+      subjectHint: uploadForm.fileSubject || '',
+      remarkHint: ''
+    })
+    const changed = applyMetadataSuggestion(res.data || res)
+    if (changed) {
+      ElMessage.success('AI 已补全资料信息，请确认后上传')
+    } else {
+      ElMessage.warning('暂未识别出可补全的信息')
+    }
+  } catch (error) {
+    console.error('AI 补全失败:', error)
+  } finally {
+    isSuggestingMetadata.value = false
+  }
 }
 
 const handleCancelUpload = async () => {
@@ -887,6 +950,30 @@ const formatSize = (bytes) => {
     display: flex;
     gap: 12px;
     .flex-1 { flex: 1; }
+  }
+
+  .agent-suggest-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+  }
+
+  .suggest-btn {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    color: var(--ide-accent);
+    background: rgba(var(--ide-accent-rgb, 64, 158, 255), 0.08);
+    border: 1px solid rgba(var(--ide-accent-rgb, 64, 158, 255), 0.22);
+    font-weight: 600;
+
+    &:hover {
+      border-color: var(--ide-accent) !important;
+      color: #ffffff !important;
+      background: var(--ide-accent) !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(var(--ide-accent-rgb, 64, 158, 255), 0.22);
+    }
   }
   
   :deep(.el-input__wrapper), :deep(.el-select__wrapper) {

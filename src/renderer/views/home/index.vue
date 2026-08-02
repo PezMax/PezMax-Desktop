@@ -67,6 +67,7 @@
       @report-file="openReportDialog"
       @toggle-favorite="toggleFavorite"
       @download-file="handleDownload"
+      @open-related-file="openRelatedFile"
     />
 
     <!-- 全局设置模块弹窗 -->
@@ -828,6 +829,18 @@ const openFileInfo = (node, data, event) => {
   const fileInfo = data.fileInfo || data
   currentInfoFile.value = fileInfo
   infoDrawerVisible.value = true
+}
+
+const openRelatedFile = (file) => {
+  if (!file) return
+  handleNodeClick({
+    id: file.fileId || file.id,
+    label: file.fileName || file.label || '未命名',
+    url: file.fileUrl || file.url || '',
+    type: 'file',
+    fileExt: file.fileFormat || '',
+    fileInfo: file
+  })
 }
 
 // 树节点点击(打开文件或书签)

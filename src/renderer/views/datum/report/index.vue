@@ -70,6 +70,15 @@
             v-hasPermi="['datum:report:export']"
         >导出</el-button>
       </el-col>
+      <el-col :span="1.5">
+        <el-button
+            type="primary"
+            plain
+            icon="MagicStick"
+            :loading="summarizingReports"
+            @click="handleAISummarize()"
+        >AI 摘要</el-button>
+      </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
@@ -83,6 +92,7 @@
       <el-table-column label="备注" align="center" prop="remark" />
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template #default="scope">
+          <el-button link type="primary" icon="MagicStick" @click="handleAISummarize(scope.row)">AI 分析</el-button>
           <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['datum:report:edit']">修改</el-button>
           <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['datum:report:remove']">删除</el-button>
         </template>
@@ -135,11 +145,62 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="summaryDrawerVisible" title="AI 举报审核摘要" size="480px" append-to-body>
+      <div class="report-summary-panel">
+        <el-alert
+            v-if="reportSummary.summary"
+            :title="reportSummary.summary"
+            type="info"
+            show-icon
+            :closable="false"
+        />
+        <div class="risk-line">
+          <span>整体风险</span>
+          <el-tag :type="riskTagType(reportSummary.riskLevel)">
+            {{ riskText(reportSummary.riskLevel) }}
+          </el-tag>
+        </div>
+        <section v-for="item in reportSummary.reports || []" :key="item.report.reportId" class="summary-card">
+          <div class="summary-head">
+            <div>
+              <h4>举报 #{{ item.report.reportId }}</h4>
+              <p>文件 #{{ item.report.fileId || '-' }} / 用户 #{{ item.report.userId || '-' }}</p>
+            </div>
+            <el-tag :type="riskTagType(item.audit?.riskLevel)">
+              {{ riskText(item.audit?.riskLevel) }}
+            </el-tag>
+          </div>
+          <div class="summary-file" v-if="item.file">
+            <strong>{{ item.file.fileName || '未知文件' }}</strong>
+            <span>{{ item.file.fileSchool || '-' }} / {{ item.file.fileSubject || '未分类' }} / {{ item.file.fileYear || '未知年份' }}</span>
+          </div>
+          <div class="summary-block">
+            <h5>审核建议</h5>
+            <p>{{ item.audit?.reviewComment || item.audit?.suggestedAction || '暂无建议' }}</p>
+          </div>
+          <div class="summary-block" v-if="item.clues?.length">
+            <h5>线索</h5>
+            <p v-for="clue in item.clues" :key="clue">{{ clue }}</p>
+          </div>
+          <div class="summary-block" v-if="item.nextActions?.length">
+            <h5>下一步</h5>
+            <p v-for="action in item.nextActions" :key="action">{{ action }}</p>
+          </div>
+        </section>
+        <div class="summary-block" v-if="reportSummary.suggestions?.length">
+          <h5>处理建议</h5>
+          <p v-for="tip in reportSummary.suggestions" :key="tip">{{ tip }}</p>
+        </div>
+        <el-empty v-if="!reportSummary.reports?.length" description="暂无摘要结果" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup name="Report">
 import { listReport, getReport, delReport, addReport, updateReport } from "@/api/datum/report"
+import { summarizeReportsByAgent } from "@/api/agent"
 
 const { proxy } = getCurrentInstance()
 
@@ -152,6 +213,9 @@ const single = ref(true)
 const multiple = ref(true)
 const total = ref(0)
 const title = ref("")
+const summarizingReports = ref(false)
+const summaryDrawerVisible = ref(false)
+const reportSummary = ref({})
 
 const data = reactive({
   form: {},
@@ -287,5 +351,97 @@ function handleExport() {
   }, `report_${new Date().getTime()}.xlsx`)
 }
 
+async function handleAISummarize(row) {
+  summarizingReports.value = true
+  try {
+    const payload = row
+      ? { reportId: Number(row.reportId) || 0 }
+      : {
+          fileId: queryParams.value.fileId ? Number(queryParams.value.fileId) : 0,
+          userId: queryParams.value.userId ? Number(queryParams.value.userId) : 0,
+          result: queryParams.value.result || '',
+          pageNum: 1,
+          pageSize: 10
+        }
+    const res = await summarizeReportsByAgent(payload)
+    reportSummary.value = res.data || res
+    summaryDrawerVisible.value = true
+  } catch (error) {
+    console.error('AI 举报摘要失败:', error)
+  } finally {
+    summarizingReports.value = false
+  }
+}
+
+function riskTagType(level) {
+  if (level === 'high') return 'danger'
+  if (level === 'medium') return 'warning'
+  if (level === 'low') return 'success'
+  return 'info'
+}
+
+function riskText(level) {
+  if (level === 'high') return '高风险'
+  if (level === 'medium') return '中风险'
+  if (level === 'low') return '低风险'
+  return level || '未知'
+}
+
 getList()
 </script>
+
+<style scoped>
+.report-summary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.risk-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  font-weight: 650;
+}
+.summary-card {
+  padding: 14px;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  background: #fff;
+}
+.summary-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.summary-head h4 {
+  margin: 0 0 4px;
+}
+.summary-head p,
+.summary-file span,
+.summary-block p {
+  margin: 0;
+  color: #606266;
+  line-height: 1.6;
+}
+.summary-file {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  margin-bottom: 12px;
+}
+.summary-block {
+  margin-top: 12px;
+}
+.summary-block h5 {
+  margin: 0 0 6px;
+  color: #303133;
+}
+</style>
