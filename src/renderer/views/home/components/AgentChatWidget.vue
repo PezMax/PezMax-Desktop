@@ -17,6 +17,8 @@
             <div class="message-bubble">
               <div class="message-text">{{ message.content }}</div>
 
+              <div v-if="message.analysis" class="message-analysis">{{ message.analysis }}</div>
+
               <div v-if="message.plan?.length" class="study-plan">
                 <div v-for="day in message.plan" :key="day.day" class="study-day">
                   <div class="study-day-title">{{ day.title || `第 ${day.day} 天` }}</div>
@@ -28,6 +30,30 @@
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div v-if="message.questions?.length" class="mock-questions">
+                <div v-for="question in message.questions" :key="question.number" class="mock-question">
+                  <div class="mock-question-title">第 {{ question.number }} 题 · {{ question.type || '题目' }}</div>
+                  <div class="mock-question-stem">{{ question.stem }}</div>
+                  <div v-if="question.options?.length" class="mock-options">
+                    <div v-for="option in question.options" :key="option">{{ option }}</div>
+                  </div>
+                  <div v-if="question.answer" class="mock-answer">答案：{{ question.answer }}</div>
+                </div>
+              </div>
+
+              <div v-if="message.sources?.length" class="web-sources">
+                <a
+                  v-for="source in message.sources"
+                  :key="source.url || source.title"
+                  class="web-source"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {{ source.title || source.url || '网络资源' }}
+                </a>
               </div>
 
               <div v-if="message.files?.length" class="file-results">
@@ -112,6 +138,7 @@ function normalizeFiles(payload) {
     data?.items,
     data?.recommendations,
     data?.recommendedFiles,
+    data?.sourceFiles,
     planFiles,
     data?.hotFiles,
     data?.lowQualityFiles,
@@ -130,6 +157,18 @@ function normalizeStudyPlan(payload) {
   const data = payload?.data || payload
   if (!Array.isArray(data?.plan)) return []
   return data.plan.slice(0, 14)
+}
+
+function normalizeSources(payload) {
+  const data = payload?.data || payload
+  if (!Array.isArray(data?.webSources)) return []
+  return data.webSources.slice(0, 4)
+}
+
+function normalizeQuestions(payload) {
+  const data = payload?.data || payload
+  if (!Array.isArray(data?.questions)) return []
+  return data.questions.slice(0, 10)
 }
 
 async function scrollToBottom() {
@@ -161,7 +200,10 @@ async function sendMessage() {
       id: `assistant-${Date.now()}`,
       role: 'assistant',
       content: payload?.answer || payload?.summary || '已完成。',
+      analysis: payload?.data?.materialAnalysis || payload?.materialAnalysis || '',
       plan: normalizeStudyPlan(payload),
+      questions: normalizeQuestions(payload),
+      sources: normalizeSources(payload),
       files: normalizeFiles(payload)
     })
   } catch (error) {
@@ -307,6 +349,13 @@ html.dark .agent-panel {
   color: #fff;
 }
 
+.message-analysis {
+  margin-top: 8px;
+  color: var(--ide-text-light);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .study-plan {
   margin-top: 10px;
   display: flex;
@@ -357,6 +406,69 @@ html.dark .agent-panel {
   color: var(--ide-text-light);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.web-sources {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mock-questions {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.mock-question {
+  padding: 10px;
+  border: 1px solid var(--ide-border);
+  border-radius: 10px;
+  background: rgba(var(--ide-bg-rgb, 255, 255, 255), 0.62);
+}
+
+.mock-question-title {
+  color: var(--ide-text-active);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mock-question-stem,
+.mock-answer {
+  margin-top: 6px;
+  color: var(--ide-text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.mock-options {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ide-text-light);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mock-answer {
+  color: var(--ide-accent);
+  font-weight: 700;
+}
+
+.web-source {
+  color: var(--ide-accent);
+  font-size: 12px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.web-source:hover {
+  text-decoration: underline;
 }
 
 .loading-bubble {

@@ -32,6 +32,14 @@ export function generateStudyPlanByAgent(data) {
   })
 }
 
+export function generateMockExamByAgent(data) {
+  return request({
+    url: '/api/v1/agent/study/mock-exam',
+    method: 'post',
+    data
+  })
+}
+
 export function suggestFileMetadata(data) {
   return request({
     url: '/api/v1/agent/files/metadata/suggest',

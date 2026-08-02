@@ -13,6 +13,10 @@
           <RankView />
         </template>
 
+        <template v-else-if="activeView === 'study'">
+          <StudyPlanView @open-file="openStudyPlanFile" />
+        </template>
+
         <template v-else>
           <!-- 包装一个容器让 transition 能正确处理平级组件 -->
           <div ref="rootRef" class="ide-main-content-wrapper">
@@ -122,6 +126,7 @@ import SidePanel from './components/SidePanel.vue'
 import MainEditor from './components/MainEditor.vue'
 import FileInfoDrawer from './components/FileInfoDrawer.vue'
 import AgentChatWidget from './components/AgentChatWidget.vue'
+import StudyPlanView from './components/StudyPlanView.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import DonateModal from './components/DonateModal.vue'
 import RankView from '@/views/rank/index.vue'
@@ -150,6 +155,7 @@ const normalizeView = (v) => {
     v === 'explorer' ||
     v === 'upload' ||
     v === 'rank' ||
+    v === 'study' ||
     v === 'bookmark' ||
     v === 'reportUser' ||
     v === 'none'
@@ -844,6 +850,18 @@ const openRelatedFile = (file) => {
     fileExt: file.fileFormat || '',
     fileInfo: file
   })
+}
+
+const openStudyPlanFile = (file) => {
+  if (!file) return
+  const fileUrl = file.fileUrl || file.url || ''
+  if (!fileUrl) {
+    currentInfoFile.value = file
+    infoDrawerVisible.value = true
+    return
+  }
+  openRelatedFile(file)
+  router.push({ path: '/index', query: { view: 'explorer' } })
 }
 
 // 树节点点击(打开文件或书签)

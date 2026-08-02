@@ -10,6 +10,9 @@
       <div :class="['activity-item', { active: activeView === 'rank' }]" @click="$emit('change-view', 'rank')" title="用户排行">
         <svg-icon icon-class="chart" />
       </div>
+      <div :class="['activity-item', { active: activeView === 'study' }]" @click="$emit('change-view', 'study')" title="学习计划">
+        <svg-icon icon-class="education" />
+      </div>
       <div :class="['activity-item', { active: activeView === 'upload' }]" @click="$emit('change-view', 'upload')" title="贡献文件">
         <svg-icon icon-class="upload" />
       </div>
