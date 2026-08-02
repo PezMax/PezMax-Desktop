@@ -72,9 +72,11 @@ import { nextTick, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, Close, Loading, Promotion } from '@element-plus/icons-vue'
 import { agentChat } from '@/api/agent'
+import useUserStore from '@/store/modules/user'
 
 defineEmits(['open-file'])
 
+const userStore = useUserStore()
 const visible = ref(false)
 const loading = ref(false)
 const input = ref('')
@@ -89,11 +91,20 @@ const messages = ref([
 
 function normalizeFiles(payload) {
   const data = payload?.data || payload
-  const results = data?.results || data?.items || []
-  if (!Array.isArray(results)) return []
-  return results
+  const resultGroups = [
+    data?.results,
+    data?.items,
+    data?.recommendations,
+    data?.hotFiles,
+    data?.lowQualityFiles,
+    data?.reportPressure
+  ]
+  return resultGroups
+    .filter(Array.isArray)
+    .flat()
     .map(item => item?.file || item)
     .filter(Boolean)
+    .filter(item => item.fileId || item.id || item.fileName)
     .slice(0, 5)
 }
 
@@ -117,7 +128,10 @@ async function sendMessage() {
 
   loading.value = true
   try {
-    const res = await agentChat({ message: text })
+    const res = await agentChat({
+      message: text,
+      userId: Number(userStore.id) || undefined
+    })
     const payload = res?.data || res
     messages.value.push({
       id: `assistant-${Date.now()}`,
