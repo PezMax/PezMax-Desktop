@@ -1,3 +1,5 @@
+本仓库为旧版本仓库，已停止维护，新版本请前往 [PezMax-Go](https://github.com/PezMax/PezMax-Go)
+---
 <div align="center">
 
 # 🧩 PezMax - 拼图满绩 
